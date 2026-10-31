@@ -3011,6 +3011,24 @@ select:focus {
   color: #f8fafc;
 }
 
+.site-pill-kimi {
+  border-color: rgba(99, 179, 255, 0.34);
+  background: rgba(99, 179, 255, 0.1);
+  color: #a8d8ff;
+}
+
+.site-pill-glm {
+  border-color: rgba(146, 129, 255, 0.34);
+  background: rgba(146, 129, 255, 0.1);
+  color: #c3b7ff;
+}
+
+.site-pill-qwen {
+  border-color: rgba(108, 227, 196, 0.32);
+  background: rgba(108, 227, 196, 0.1);
+  color: #a5f0d8;
+}
+
 .site-pill-external {
   border-color: rgba(236, 113, 255, 0.34);
   background: rgba(236, 113, 255, 0.1);
@@ -5063,6 +5081,24 @@ select:focus {
 }
 
 :root[data-theme="light"] .site-pill-grok {
+  border-color: rgba(17, 24, 39, 0.12);
+  background: #f6f7f8;
+  color: #4b5563;
+}
+
+:root[data-theme="light"] .site-pill-kimi {
+  border-color: rgba(17, 24, 39, 0.12);
+  background: #f6f7f8;
+  color: #4b5563;
+}
+
+:root[data-theme="light"] .site-pill-glm {
+  border-color: rgba(17, 24, 39, 0.12);
+  background: #f6f7f8;
+  color: #4b5563;
+}
+
+:root[data-theme="light"] .site-pill-qwen {
   border-color: rgba(17, 24, 39, 0.12);
   background: #f6f7f8;
   color: #4b5563;

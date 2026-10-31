@@ -1,7 +1,7 @@
 import type { ChatSiteAdapter, ConversationSnapshot, SiteStatusInfo } from './types'
 import { keepDeepestResponseContainers } from '../responseContainers'
 import { findClickableCopyButton, readResponseTextFromCopyAction } from './clipboardCopy'
-import { readEditorText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
+import { editorHoldsText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
 import { extractMarkdownFromDom } from './domMarkdown'
 import { buttonLabelMatches, describeElement, extractCleanTextFromDom, findClosestMatchingAncestor } from './domText'
 import { isClickableButton, isElementVisible, waitForElement } from './waitForElement'
@@ -71,7 +71,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ChatSit
     const editor = await waitForClaudeEditor(inputTimeoutMs)
 
     setContentEditableText(editor, content)
-    if (readEditorText(editor, { normalizeNbsp: true }) !== content.trim()) {
+    if (!editorHoldsText(editor, content)) {
       throw new Error('Claude 输入框没有接收提示词（页面可能仍在加载），请在页面上手动确认后重试')
     }
 

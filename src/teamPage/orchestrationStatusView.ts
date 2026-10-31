@@ -1,6 +1,6 @@
+import { chatSiteLabel } from '../group/chatSites'
 import {
   DEFAULT_ORCHESTRATION_REVIEW_MAX_ATTEMPTS,
-  type ChatSite,
   type ExternalModelConfig,
   type GroupChat,
   type GroupRole,
@@ -562,13 +562,7 @@ function externalModelLabel(model: ExternalModelConfig | undefined): string {
   return model?.name ?? 'API'
 }
 
-function siteLabel(site: ChatSite): string {
-  if (site === 'chatgpt') return 'ChatGPT'
-  if (site === 'claude') return 'Claude'
-  if (site === 'deepseek') return 'DeepSeek'
-  if (site === 'grok') return 'Grok'
-  return 'Gemini'
-}
+const siteLabel = chatSiteLabel
 
 function maxExecutions(run: OrchestrationRun): number {
   return run.maxNodeExecutions ?? run.maxRounds

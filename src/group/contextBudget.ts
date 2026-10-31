@@ -6,6 +6,9 @@ export const CONTEXT_CHAR_BUDGET_BY_SITE: Record<ChatSite, number> = {
   claude: 500_000,
   deepseek: 1_000_000,
   grok: 256_000,
+  kimi: 256_000,
+  glm: 128_000,
+  qwen: 128_000,
 }
 
 export function contextCharBudgetForRole(store: OpenTeamStore, role: GroupRole): number {
@@ -24,6 +27,9 @@ function contextCharBudgetForExternalModel(model: ExternalModelConfig | undefine
   if (label.includes('gemini')) return CONTEXT_CHAR_BUDGET_BY_SITE.gemini
   if (label.includes('deepseek')) return CONTEXT_CHAR_BUDGET_BY_SITE.deepseek
   if (label.includes('grok') || label.includes('xai')) return CONTEXT_CHAR_BUDGET_BY_SITE.grok
+  if (label.includes('kimi') || label.includes('moonshot')) return CONTEXT_CHAR_BUDGET_BY_SITE.kimi
+  if (label.includes('glm') || label.includes('chatglm') || label.includes('zhipu') || label.includes('智谱')) return CONTEXT_CHAR_BUDGET_BY_SITE.glm
+  if (label.includes('qwen') || label.includes('tongyi') || label.includes('通义')) return CONTEXT_CHAR_BUDGET_BY_SITE.qwen
   if (label.includes('claude') || label.includes('anthropic')) return 1_000_000
   if (label.includes('gpt') || label.includes('openai') || label.includes('o3') || label.includes('o4')) return CONTEXT_CHAR_BUDGET_BY_SITE.chatgpt
   return undefined

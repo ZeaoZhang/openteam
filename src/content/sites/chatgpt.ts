@@ -2,7 +2,7 @@ import type { ReplyImageSource } from '../../group/types'
 import type { ChatSiteAdapter, ConversationSnapshot, SiteStatusInfo } from './types'
 import { keepDeepestResponseContainers } from '../responseContainers'
 import { readResponseTextFromCopyAction } from './clipboardCopy'
-import { readEditorText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
+import { editorHoldsText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
 import { extractMarkdownFromDom } from './domMarkdown'
 import { buttonLabelMatches, describeElement, extractCleanTextFromDom, findClosestMatchingAncestor } from './domText'
 import { isClickableButton, isElementVisible, waitForElement } from './waitForElement'
@@ -90,7 +90,7 @@ export function createChatGptAdapter(options: ChatGptAdapterOptions = {}): ChatS
     const userTurnCountBefore = countUserTurns()
 
     setContentEditableText(editor, content)
-    if (readEditorText(editor) !== content.trim()) {
+    if (!editorHoldsText(editor, content)) {
       throw new Error('ChatGPT 输入框没有接收提示词（页面可能仍在加载），请在页面上手动确认后重试')
     }
 

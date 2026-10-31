@@ -2,7 +2,7 @@ import type { ReplyImageSource } from '../../group/types'
 import type { ChatSiteAdapter, ConversationSnapshot } from './types'
 import { keepDeepestResponseContainers } from '../responseContainers'
 import { readResponseTextFromCopyAction, findClickableCopyButton } from './clipboardCopy'
-import { readEditorText, setContentEditableText } from './contentEditable'
+import { editorHoldsText, setContentEditableText } from './contentEditable'
 import { extractMarkdownFromDom } from './domMarkdown'
 import { buttonLabelMatches, describeElement, extractCleanTextFromDom, findClosestMatchingAncestor } from './domText'
 import { isClickableButton, waitForClickableButton, waitForElement } from './waitForElement'
@@ -70,7 +70,7 @@ export function createGeminiAdapter(options: GeminiAdapterOptions = {}): ChatSit
     const editor = await waitForElement(GEMINI_SELECTORS.editor, inputTimeoutMs)
 
     setContentEditableText(editor, content)
-    if (readEditorText(editor) !== content.trim()) {
+    if (!editorHoldsText(editor, content)) {
       throw new Error('Gemini editor did not accept the prompt text')
     }
 

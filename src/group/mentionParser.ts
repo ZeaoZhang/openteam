@@ -1,3 +1,4 @@
+import { chatSiteLabel } from './chatSites'
 import type { GroupChat, GroupRole, OpenTeamSettings } from './types'
 
 type OrchestrationMentionTarget = 'default' | { name: string }
@@ -116,11 +117,7 @@ export function roleMentionLabelOptionsFromSettings(settings: Pick<OpenTeamSetti
 }
 
 function siteLabel(site: GroupRole['chatSite']): string {
-  if (site === 'chatgpt') return 'ChatGPT'
-  if (site === 'claude') return 'Claude'
-  if (site === 'deepseek') return 'DeepSeek'
-  if (site === 'grok') return 'Grok'
-  return 'Gemini'
+  return chatSiteLabel(site)
 }
 
 function mentionMatches(raw: string, atIndex: number, target: string): boolean {

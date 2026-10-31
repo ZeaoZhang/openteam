@@ -1,3 +1,4 @@
+import { chatSiteLabel } from '../group/chatSites'
 import { getSafeSupportedChatIframeSrcForRole, getSupportedChatOrigin } from '../group/conversationUrl'
 import type { ChatSite, GroupChat, GroupRole } from '../group/types'
 
@@ -543,13 +544,7 @@ function chatActivationSignature(chat: IframeHostChat, roles: IframeHostRole[]):
   return `${chat.id}:${chat.name}:${chat.roleIds.join(',')}:${roleSignature}`
 }
 
-function siteLabel(site: ChatSite | undefined): string {
-  if (site === 'chatgpt') return 'ChatGPT'
-  if (site === 'claude') return 'Claude'
-  if (site === 'deepseek') return 'DeepSeek'
-  if (site === 'grok') return 'Grok'
-  return 'Gemini'
-}
+const siteLabel = chatSiteLabel
 
 function disabledRoleFrameState(role: IframeHostRole): RoleFrameState {
   return {

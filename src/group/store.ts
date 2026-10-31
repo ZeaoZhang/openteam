@@ -7,6 +7,7 @@ import {
 } from './types'
 import { OPENTEAM_CONTROL_DEFAULT_PORT, OPENTEAM_CONTROL_LEGACY_DEFAULT_PORT } from '../shared/localControlProtocol'
 import { defaultLanguageForEnvironment, normalizeLanguage } from '../shared/i18n'
+import { isChatSite } from './chatSites'
 import type { ExternalModelConfig, GroupChat, GroupMessage, GroupRole, MessageHighlight, OpenTeamSettings, OpenTeamStore, OpenTeamViewState, OrchestrationFlow, OrchestrationRun, RichNoteDocument, RoleTemplate } from './types'
 import { normalizeMessageHighlightColor } from './highlightColors'
 import { DEFAULT_CUSTOM_ROLE_TEMPLATES } from './defaultCustomRoleTemplates'
@@ -636,7 +637,7 @@ function readAgentControlPort(raw: unknown, storedVersion: number): number {
 }
 
 function readSettingsChatSite(raw: unknown): OpenTeamSettings['defaultChatSite'] {
-  return raw === 'gemini' || raw === 'chatgpt' || raw === 'claude' || raw === 'deepseek' || raw === 'grok' ? raw : DEFAULT_SETTINGS.defaultChatSite
+  return isChatSite(raw) ? raw : DEFAULT_SETTINGS.defaultChatSite
 }
 
 function normalizeExternalModelRecord(raw: unknown): Record<string, ExternalModelConfig> {

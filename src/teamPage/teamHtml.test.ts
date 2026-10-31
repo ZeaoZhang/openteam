@@ -387,7 +387,7 @@ describe('team.html chat creation UI', () => {
     expect(source).toContain("if (deps.templateSiteClaudeEl.checked) return 'claude'")
     expect(source).toContain("if (deps.templateSiteDeepSeekEl.checked) return 'deepseek'")
     expect(source).toContain("if (deps.templateSiteGrokEl.checked) return 'grok'")
-    expect(source).toContain("const VISIBLE_CHAT_SITES = ['gemini', 'chatgpt', 'claude', 'deepseek', 'grok'] as const")
+    expect(source).toContain('const VISIBLE_CHAT_SITES = CHAT_SITE_LIST')
     for (const site of REMOVED_SITE_IDS) expect(source).not.toContain(`return '${site}'`)
     expect(source).not.toContain('templateSite' + 'K' + 'imiEl')
     expect(source).not.toContain('templateSite' + 'Q' + 'wenEl')

@@ -12,6 +12,12 @@ const DEEPSEEK_ORIGIN = 'https://chat.deepseek.com'
 const DEEPSEEK_HOME_URL = `${DEEPSEEK_ORIGIN}/`
 const GROK_ORIGIN = 'https://grok.com'
 const GROK_HOME_URL = `${GROK_ORIGIN}/`
+const KIMI_ORIGIN = 'https://www.kimi.com'
+const KIMI_HOME_URL = `${KIMI_ORIGIN}/`
+const QWEN_ORIGIN = 'https://chat.qwen.ai'
+const QWEN_HOME_URL = `${QWEN_ORIGIN}/`
+const GLM_ORIGIN = 'https://chatglm.cn'
+const GLM_HOME_URL = `${GLM_ORIGIN}/main/alltoolsdetail`
 
 interface ChatSiteStartUrlRole {
   chatSite?: ChatSite
@@ -39,7 +45,16 @@ export function getSafeGeminiIframeSrc(value: string | undefined): string {
 }
 
 export function isSafeSupportedChatUrl(value: string | undefined): value is string {
-  return isSafeGeminiUrl(value) || isSafeChatGptUrl(value) || isSafeClaudeUrl(value) || isSafeDeepSeekUrl(value) || isSafeGrokUrl(value)
+  return (
+    isSafeGeminiUrl(value) ||
+    isSafeChatGptUrl(value) ||
+    isSafeClaudeUrl(value) ||
+    isSafeDeepSeekUrl(value) ||
+    isSafeGrokUrl(value) ||
+    isSafeKimiUrl(value) ||
+    isSafeQwenUrl(value) ||
+    isSafeGlmUrl(value)
+  )
 }
 
 export function getSafeSupportedChatUrl(value: string | undefined): string {
@@ -55,6 +70,9 @@ export function getDefaultChatSiteUrl(site: ChatSite | undefined): string {
   if (site === 'claude') return CLAUDE_HOME_URL
   if (site === 'deepseek') return DEEPSEEK_HOME_URL
   if (site === 'grok') return GROK_HOME_URL
+  if (site === 'kimi') return KIMI_HOME_URL
+  if (site === 'qwen') return QWEN_HOME_URL
+  if (site === 'glm') return GLM_HOME_URL
   return GEMINI_HOME_URL
 }
 
@@ -100,7 +118,10 @@ export function extractSupportedConversationId(value: string | undefined): strin
     extractChatGptConversationId(value) ??
     extractClaudeConversationId(value) ??
     extractDeepSeekConversationId(value) ??
-    extractGrokConversationId(value)
+    extractGrokConversationId(value) ??
+    extractKimiConversationId(value) ??
+    extractQwenConversationId(value) ??
+    extractGlmConversationId(value)
   )
 }
 
@@ -115,6 +136,9 @@ export function getSupportedChatOriginForSite(value: string | undefined, site: C
   if (site === 'claude') return CLAUDE_ORIGIN
   if (site === 'deepseek') return DEEPSEEK_ORIGIN
   if (site === 'grok') return GROK_ORIGIN
+  if (site === 'kimi') return KIMI_ORIGIN
+  if (site === 'qwen') return QWEN_ORIGIN
+  if (site === 'glm') return GLM_ORIGIN
   return GEMINI_ORIGIN
 }
 
@@ -219,6 +243,69 @@ function extractGrokConversationId(value: string | undefined): string | undefine
 
   const url = new URL(value)
   const match = url.pathname.match(/^\/(?:chat|c)\/([^/]+)/)
+  const conversationId = match?.[1]
+  return conversationId ? decodeURIComponent(conversationId) : undefined
+}
+
+function isSafeKimiUrl(value: string | undefined): value is string {
+  if (!value || !value.startsWith(KIMI_HOME_URL)) return false
+
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.hostname === 'www.kimi.com'
+  } catch {
+    return false
+  }
+}
+
+function extractKimiConversationId(value: string | undefined): string | undefined {
+  if (!isSafeKimiUrl(value)) return undefined
+
+  const url = new URL(value)
+  const match = url.pathname.match(/^\/chat\/([^/]+)/)
+  const conversationId = match?.[1]
+  return conversationId ? decodeURIComponent(conversationId) : undefined
+}
+
+function isSafeQwenUrl(value: string | undefined): value is string {
+  if (!value || !value.startsWith(QWEN_HOME_URL)) return false
+
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.hostname === 'chat.qwen.ai'
+  } catch {
+    return false
+  }
+}
+
+function extractQwenConversationId(value: string | undefined): string | undefined {
+  if (!isSafeQwenUrl(value)) return undefined
+
+  const url = new URL(value)
+  const match = url.pathname.match(/^\/(?:c|chat)\/([^/]+)/)
+  const conversationId = match?.[1]
+  return conversationId ? decodeURIComponent(conversationId) : undefined
+}
+
+function isSafeGlmUrl(value: string | undefined): value is string {
+  if (!value || !value.startsWith(`${GLM_ORIGIN}/`)) return false
+
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.hostname === 'chatglm.cn'
+  } catch {
+    return false
+  }
+}
+
+function extractGlmConversationId(value: string | undefined): string | undefined {
+  if (!isSafeGlmUrl(value)) return undefined
+
+  const url = new URL(value)
+  const fromQuery = url.searchParams.get('chatId') ?? url.searchParams.get('sessionId') ?? undefined
+  if (fromQuery) return fromQuery
+
+  const match = url.pathname.match(/^\/main\/(?:gdetail|chat)\/([^/]+)/)
   const conversationId = match?.[1]
   return conversationId ? decodeURIComponent(conversationId) : undefined
 }

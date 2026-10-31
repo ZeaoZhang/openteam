@@ -1,3 +1,4 @@
+import { CHAT_SITE_LIST, chatSiteLabel, isChatSite } from '../group/chatSites'
 import { ROLE_NAME_MAX_CHARACTERS } from '../group/roleTemplates'
 import type { GeneratedPersonDraft } from '../group/personaGeneration'
 import type { ChatSite, ExternalModelConfig, GroupChat, OpenTeamStore, RoleModelSource, RoleTemplate } from '../group/types'
@@ -11,7 +12,7 @@ type AddPersonItem =
 
 const TEMPLATE_CATEGORY_ALL = '全部'
 const PEOPLE_LIBRARY_PAGE_SIZE = 5
-const VISIBLE_CHAT_SITES = ['gemini', 'chatgpt', 'claude', 'deepseek', 'grok'] as const
+const VISIBLE_CHAT_SITES = CHAT_SITE_LIST
 
 export interface PeopleLibraryViewDependencies {
   state: TeamPageState
@@ -949,13 +950,7 @@ export function createPeopleLibraryView(deps: PeopleLibraryViewDependencies): Pe
   return { closePeopleModals, openAddPersonDialog, registerPeopleLibraryEvents, renderAddPersonDialog, renderTemplates }
 }
 
-function siteLabel(site: ChatSite | undefined): string {
-  if (site === 'chatgpt') return 'ChatGPT'
-  if (site === 'claude') return 'Claude'
-  if (site === 'deepseek') return 'DeepSeek'
-  if (site === 'grok') return 'Grok'
-  return 'Gemini'
-}
+const siteLabel = chatSiteLabel
 
 function templateModelLabel(template: RoleTemplate, store: OpenTeamStore): string {
   if (template.defaultModelSource === 'external' && template.defaultExternalModelId) {
@@ -1018,7 +1013,7 @@ function renderCategoryFilter(element: HTMLElement, categories: string[], active
 }
 
 function visibleChatSite(site: ChatSite | undefined): ChatSite {
-  return site && VISIBLE_CHAT_SITES.includes(site as typeof VISIBLE_CHAT_SITES[number]) ? site : 'gemini'
+  return isChatSite(site) ? site : 'gemini'
 }
 
 function externalModels(store: OpenTeamStore): ExternalModelConfig[] {

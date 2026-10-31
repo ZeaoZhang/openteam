@@ -1,3 +1,4 @@
+import { isChatSite } from '../group/chatSites'
 import { loadStore } from '../group/store'
 import type { GroupChat, OpenTeamStore } from '../group/types'
 import { createChatHandlers } from './chatHandlers'
@@ -90,7 +91,7 @@ async function handleStoreGet(message: RuntimeMessage, sender: chrome.runtime.Me
 async function handleSettingsUpdate(message: RuntimeMessage) {
   const { store } = await mutateStore(store => {
     const defaultChatSite = readOptionalString(message.defaultChatSite)
-    if (defaultChatSite === 'chatgpt' || defaultChatSite === 'gemini' || defaultChatSite === 'claude' || defaultChatSite === 'deepseek' || defaultChatSite === 'grok') {
+    if (isChatSite(defaultChatSite)) {
       store.settings.defaultChatSite = defaultChatSite
     }
     if (typeof message.agentControlEnabled === 'boolean') {

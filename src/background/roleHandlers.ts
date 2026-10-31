@@ -1,3 +1,4 @@
+import { isChatSite } from '../group/chatSites'
 import { getDefaultChatSiteUrlForRole, normalizeSupportedChatConversationUrl } from '../group/conversationUrl'
 import { buildRoleTemplatePersonaPrompt, parseGeneratedPersonDraft } from '../group/personaGeneration'
 import { buildReinitPrompt, roleUsesChatGptGptsPersona } from '../group/promptBuilder'
@@ -342,7 +343,7 @@ function getRawBatchSource(items: unknown[]): 'library' | 'temporary' | 'mixed' 
 }
 
 function readChatSite(value: unknown): ChatSite | undefined {
-  return value === 'chatgpt' || value === 'claude' || value === 'gemini' || value === 'deepseek' || value === 'grok' ? value : undefined
+  return isChatSite(value) ? value : undefined
 }
 
 function readModelSource(value: unknown): 'site' | 'external' | undefined {

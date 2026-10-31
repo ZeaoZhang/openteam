@@ -1,7 +1,7 @@
 import type { ChatSiteAdapter, ConversationSnapshot } from './types'
 import { keepDeepestResponseContainers } from '../responseContainers'
 import { findClickableCopyButton, readResponseTextFromCopyAction } from './clipboardCopy'
-import { readEditorText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
+import { editorHoldsText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
 import { extractMarkdownFromDom } from './domMarkdown'
 import { buttonLabelMatches, describeElement, extractCleanTextFromDom, findClosestMatchingAncestor } from './domText'
 import { isClickableButton } from './waitForElement'
@@ -76,7 +76,7 @@ export function createGrokAdapter(options: GrokAdapterOptions = {}): ChatSiteAda
     const userMessageCountBefore = document.querySelectorAll(GROK_SELECTORS.userMessage).length
 
     setGrokEditorText(editor, content)
-    if (readGrokEditorText(editor) !== content.trim()) {
+    if (!editorHoldsText(editor, content)) {
       recordSendFailure('grok', { editor, details: { stage: 'write' } })
       throw new Error('Grok 输入框没有接收提示词（页面可能仍在加载），请在页面上手动确认后重试')
     }
@@ -183,10 +183,6 @@ function setInputValue(editor: HTMLTextAreaElement | HTMLInputElement, content: 
   editor.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-function readGrokEditorText(editor: HTMLElement): string {
-  if (editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement) return editor.value.trim()
-  return readEditorText(editor, { normalizeNbsp: true })
-}
 
 async function waitForGrokEditor(timeoutMs: number): Promise<HTMLElement> {
   const startedAt = Date.now()

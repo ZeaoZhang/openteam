@@ -1,3 +1,4 @@
+import { isChatSite } from './chatSites'
 import type { ChatSite, GroupRole, OpenTeamStore, ReplyImageSource, RoleSiteHealthStatus, RoleStatus } from './types'
 
 export type RuntimeRoleStatus =
@@ -120,6 +121,8 @@ export function mapRuntimeRoleStatus(value: unknown): RoleStatus | undefined {
   }
 }
 
+export { CHAT_SITE_LIST as CHAT_SITES } from './chatSites'
+
 export function isRuntimeChatSite(value: unknown): value is ChatSite {
-  return value === 'gemini' || value === 'chatgpt' || value === 'claude' || value === 'deepseek' || value === 'grok'
+  return isChatSite(value)
 }

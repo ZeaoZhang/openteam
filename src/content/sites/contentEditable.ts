@@ -3,15 +3,34 @@ const DEFAULT_DISPATCH_TIMEOUT_MS = 1500
 export type EditorWriteStrategy = 'native' | 'paste' | 'dom'
 
 let lastWriteStrategy: EditorWriteStrategy | undefined
+let lastWriteDiagnostics = ''
 
 /** Which pipeline the previous setContentEditableText() call used; useful when a send fails later. */
 export function getLastEditorWriteStrategy(): EditorWriteStrategy | undefined {
   return lastWriteStrategy
 }
 
-export function setContentEditableText(editor: HTMLElement, content: string): void {
+/** Compact trail of why the native/paste pipelines were skipped; surfaced in send error messages. */
+export function getLastEditorWriteDiagnostics(): string {
+  return lastWriteDiagnostics
+}
+
+function noteWriteDiagnostic(step: string): void {
+  lastWriteDiagnostics = step
+}
+
+export function setContentEditableText(
+  editor: HTMLElement,
+  content: string,
+  options: { allowPaste?: boolean } = {},
+): void {
   if (writeWithNativeEditingPipeline(editor, content)) {
     lastWriteStrategy = 'native'
+    return
+  }
+  if (options.allowPaste === false) {
+    writeWithDomMutation(editor, content)
+    lastWriteStrategy = 'dom'
     return
   }
   // execCommand is unavailable (or silently ignored) in some embedded frames. A synthetic paste is
@@ -31,15 +50,18 @@ function writeWithPasteEvent(editor: HTMLElement, content: string): boolean {
 
   try {
     editor.focus()
-    if (!isFocusedInside(editor)) return false
-    if (readEditorText(editor) === content.trim()) return true
+    if (!isFocusedInside(editor)) {
+      noteWriteDiagnostic('paste:not-focused')
+      return false
+    }
+    if (editorHoldsText(editor, content)) return true
 
     clearEditorSelection(editor)
     const data = new DataTransfer()
     data.setData('text/plain', content)
     data.setData('text/html', `<p>${escapeHtml(content)}</p>`)
     editor.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
-    return readEditorText(editor) === content.trim()
+    return editorHoldsText(editor, content)
   } catch {
     return false
   }
@@ -47,6 +69,16 @@ function writeWithPasteEvent(editor: HTMLElement, content: string): boolean {
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Sites normalize whitespace inside their editors (list markers become single spaces, trailing
+ * newlines vanish). Compare on collapsed whitespace so a faithful long prompt is not treated as a
+ * failed write.
+ */
+export function editorHoldsText(editor: HTMLElement, content: string): boolean {
+  const collapse = (value: string) => value.replace(/\s+/g, '')
+  return collapse(readEditorText(editor)) === collapse(content)
 }
 
 export function readEditorText(editor: HTMLElement, options: { normalizeNbsp?: boolean } = {}): string {
@@ -65,34 +97,101 @@ export function readEditorText(editor: HTMLElement, options: { normalizeNbsp?: b
  * both in sync.
  */
 function writeWithNativeEditingPipeline(editor: HTMLElement, content: string): boolean {
-  if (!editor.isContentEditable) return false
-  if (typeof document.execCommand !== 'function') return false
+  if (!editor.isContentEditable) {
+    noteWriteDiagnostic('native:not-editable')
+    return false
+  }
+  if (typeof document.execCommand !== 'function') {
+    noteWriteDiagnostic('native:no-execCommand')
+    return false
+  }
 
   try {
     editor.focus()
-    if (!isFocusedInside(editor)) return false
+    if (!isFocusedInside(editor)) {
+      noteWriteDiagnostic('native:not-focused')
+      return false
+    }
 
-    clearEditorSelection(editor)
-    if (!document.execCommand('insertText', false, content)) return false
-    if (readEditorText(editor) === content.trim()) return true
+    if (!clearEditorSelection(editor)) noteWriteDiagnostic('native:clear-partial')
+    if (!document.execCommand('insertText', false, content)) {
+      noteWriteDiagnostic('native:insertText-rejected')
+      return false
+    }
+    if (editorHoldsText(editor, content)) return true
 
     // Some editors insert the text but keep the placeholder paragraph; retry once from clean state.
     clearEditorSelection(editor)
-    return document.execCommand('insertText', false, content) && readEditorText(editor) === content.trim()
-  } catch {
+    if (document.execCommand('insertText', false, content) && editorHoldsText(editor, content)) return true
+    noteWriteDiagnostic(`native:mismatch(${JSON.stringify(readEditorText(editor).slice(0, 20))})`)
+    return false
+  } catch (error) {
+    noteWriteDiagnostic(`native:error(${error instanceof Error ? error.message : String(error)})`)
     return false
   }
 }
 
-function clearEditorSelection(editor: HTMLElement): void {
+/**
+ * Some chat pages render their composer before the editor library finishes booting, so the first
+ * write can be wiped by the site's first render. Retry a few times until the editor keeps the text.
+ */
+export async function writeEditorTextWithRetry(
+  editor: HTMLElement,
+  content: string,
+  options: { attempts?: number; delayMs?: number; stabilityDelayMs?: number; allowPaste?: boolean } = {},
+): Promise<boolean> {
+  const attempts = options.attempts ?? 4
+  const delayMs = options.delayMs ?? 600
+  const stabilityDelayMs = options.stabilityDelayMs ?? 400
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    setContentEditableText(editor, content, { allowPaste: options.allowPaste })
+    if (!editorHoldsText(editor, content)) {
+      if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs))
+      continue
+    }
+    // A just-mounted composer can accept the text and then drop it during the site's first render,
+    // so confirm the text survives a beat before declaring the write successful.
+    await new Promise(resolve => setTimeout(resolve, stabilityDelayMs))
+    if (editorHoldsText(editor, content)) return true
+    if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs))
+  }
+
+  return editorHoldsText(editor, content)
+}
+
+/**
+ * Empty the editor through the site's own editing pipeline. Large drafts (Lexical keeps its own
+ * document model) can survive a single `delete`, so retry with select-all and report whether the
+ * editor really ended up empty.
+ */
+export function clearEditorContent(editor: HTMLElement): boolean {
+  if (isEditorEmpty(editor)) return true
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    clearEditorSelection(editor)
+    if (isEditorEmpty(editor)) return true
+    if (typeof document.execCommand !== 'function') break
+    if (!document.execCommand('selectAll', false)) continue
+    document.execCommand('delete', false)
+    if (isEditorEmpty(editor)) return true
+  }
+  return isEditorEmpty(editor)
+}
+
+function isEditorEmpty(editor: HTMLElement): boolean {
+  return readEditorText(editor).replace(/\s+/g, '').length === 0
+}
+
+function clearEditorSelection(editor: HTMLElement): boolean {
   const selection = window.getSelection()
-  if (!selection) return
+  if (!selection) return false
 
   const range = document.createRange()
   range.selectNodeContents(editor)
   selection.removeAllRanges()
   selection.addRange(range)
   if (typeof document.execCommand === 'function') document.execCommand('delete', false)
+  return isEditorEmpty(editor)
 }
 
 function isFocusedInside(editor: HTMLElement): boolean {
@@ -111,6 +210,16 @@ function writeWithDomMutation(editor: HTMLElement, content: string): void {
   editor.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, inputType: 'insertText', data: content }))
   editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: content }))
   editor.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+/**
+ * Adapters use this to explain a failed write: a composer that survived the clear usually means the
+ * site restored an unsent draft, which a script cannot remove without trusted input.
+ */
+export function describeEditorWriteFailure(editor: HTMLElement): string {
+  const leftover = readEditorText(editor).replace(/\s+/g, ' ').trim()
+  if (!leftover) return ''
+  return `；输入框里残留了 ${leftover.length} 个字符的未发送内容，请在该角色页面里手动清空输入框后重试`
 }
 
 export function dispatchEnterKey(editor: HTMLElement, options: { metaKey?: boolean } = {}): boolean {

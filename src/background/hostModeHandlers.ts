@@ -67,6 +67,19 @@ export const SITE_CAPABILITIES: SiteCapability[] = [
     embeddable: false,
     note: 'Grok 的回复依赖 WebSocket，在嵌入窗口里常被浏览器拦截；建议用独立标签页承载。',
   },
+  {
+    site: 'kimi',
+    label: 'Kimi',
+    embeddable: false,
+    note: 'Kimi 在嵌入窗口里会忽略脚本触发的发送操作，请用独立标签页承载。',
+  },
+  { site: 'qwen', label: 'Qwen', embeddable: true, note: '嵌入窗口与独立标签页都可用。' },
+  {
+    site: 'glm',
+    label: '智谱清言',
+    embeddable: true,
+    note: '嵌入窗口可用；站点偶发滑块人机验证，需要先在页面里验证一次。',
+  },
 ]
 
 export function siteLabelFor(site: ChatSite | undefined): string {
