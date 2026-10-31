@@ -229,4 +229,74 @@ describe('Grok site adapter', () => {
 
     expect(createGrokAdapter().readResponseMarkdown?.(response)).toBe('## 方案\n\n**结论**：可以做\n\n- 接入 adapter\n- 验证登录态')
   })
+
+  it('finds the current Grok composer mounted under #chat-input', async () => {
+    document.body.innerHTML = `
+      <form>
+        <div class="query-bar">
+          <div id="chat-input">
+            <div class="tiptap ProseMirror" contenteditable="true" aria-label="向 Grok 提任何问题"><p><br></p></div>
+          </div>
+          <button type="button" data-testid="attach-button" aria-label="附件"></button>
+          <button type="submit" data-testid="chat-submit" aria-label="提交"></button>
+        </div>
+      </form>
+    `
+    const editor = document.querySelector<HTMLElement>('#chat-input .ProseMirror')!
+    const attachListener = vi.fn()
+    const clickListener = vi.fn()
+    document.querySelector<HTMLButtonElement>('[data-testid="attach-button"]')!.addEventListener('click', attachListener)
+    document.querySelector<HTMLButtonElement>('[data-testid="chat-submit"]')!.addEventListener('click', event => {
+      event.preventDefault()
+      clickListener()
+    })
+
+    await createGrokAdapter({ inputTimeoutMs: 250 }).fillAndSend('移动端提示词', true)
+
+    expect(editor.textContent).toBe('移动端提示词')
+    expect(clickListener).toHaveBeenCalledTimes(1)
+    expect(attachListener).not.toHaveBeenCalled()
+  })
+
+  it('reports an actionable error when Grok cannot open its live connection', async () => {
+    document.body.innerHTML = `
+      <div class="query-bar">
+        <div class="tiptap ProseMirror" contenteditable="true" aria-label="向 Grok 提任何问题"><p><br></p></div>
+        <button type="submit" data-testid="chat-submit" aria-label="提交"></button>
+      </div>
+    `
+    const editor = document.querySelector<HTMLElement>('.ProseMirror')!
+    document.querySelector<HTMLButtonElement>('[data-testid="chat-submit"]')!.addEventListener('click', event => {
+      event.preventDefault()
+      editor.replaceChildren()
+      const card = document.createElement('div')
+      card.textContent = '无法开始对话 您的网络正在阻止 Grok。请尝试其他网络'
+      document.body.append(card)
+    })
+
+    await expect(createGrokAdapter({ inputTimeoutMs: 250, connectionCheckTimeoutMs: 400 }).fillAndSend('hi', true)).rejects.toThrow(
+      /Grok 无法建立实时连接/,
+    )
+  })
+
+  it('does not treat the hidden autosize textarea as the Grok composer', async () => {
+    document.body.innerHTML = `
+      <div class="query-bar">
+        <div id="chat-input">
+          <div class="tiptap ProseMirror" contenteditable="true" aria-label="向 Grok 提任何问题"><p><br></p></div>
+        </div>
+      </div>
+      <textarea style="display: none;"></textarea>
+    `
+    const hiddenTextarea = document.querySelector<HTMLTextAreaElement>('textarea')!
+    const hiddenListener = vi.fn()
+    hiddenTextarea.addEventListener('input', hiddenListener)
+
+    await createGrokAdapter().fillAndSend('visible only', false)
+
+    expect(document.querySelector<HTMLElement>('#chat-input .ProseMirror')!.textContent).toBe('visible only')
+    expect(hiddenTextarea.value).toBe('')
+    expect(hiddenListener).not.toHaveBeenCalled()
+  })
+
 })

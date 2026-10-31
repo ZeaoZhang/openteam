@@ -149,4 +149,34 @@ describe('DeepSeek site adapter', () => {
 
     expect(createDeepSeekAdapter().readResponseMarkdown?.(response)).toBe('## 方案\n\n**结论**：可以做\n\n- 先接入 adapter\n- 再验证 iframe')
   })
+
+  it('writes into the current DeepSeek placeholder composer', async () => {
+    document.body.innerHTML = `
+      <div class="aaff8b8f">
+        <textarea name="search" placeholder="给 DeepSeek 发送消息 "></textarea>
+        <div role="button" class="_52c986b"></div>
+      </div>
+    `
+    const editor = document.querySelector('textarea')!
+    const clickListener = vi.fn()
+    document.querySelector<HTMLElement>('[role="button"]')!.addEventListener('click', clickListener)
+
+    await createDeepSeekAdapter().fillAndSend('给 DeepSeek 的提示词', true)
+
+    expect(editor.value).toBe('给 DeepSeek 的提示词')
+    expect(clickListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the keyboard when DeepSeek renders no send button', async () => {
+    document.body.innerHTML = '<form><textarea name="search" placeholder="给 DeepSeek 发送消息 "></textarea></form>'
+    const textarea = document.querySelector('textarea')!
+    const enterListener = vi.fn()
+    textarea.addEventListener('keydown', event => {
+      if (event.key === 'Enter') enterListener()
+    })
+
+    await expect(createDeepSeekAdapter({ inputTimeoutMs: 120 }).fillAndSend('hello', true)).rejects.toThrow(/发送失败/)
+    expect(enterListener).toHaveBeenCalled()
+  })
+
 })

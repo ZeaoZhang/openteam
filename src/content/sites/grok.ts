@@ -1,27 +1,36 @@
 import type { ChatSiteAdapter, ConversationSnapshot } from './types'
 import { keepDeepestResponseContainers } from '../responseContainers'
 import { findClickableCopyButton, readResponseTextFromCopyAction } from './clipboardCopy'
-import { readEditorText, setContentEditableText } from './contentEditable'
+import { readEditorText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
 import { extractMarkdownFromDom } from './domMarkdown'
 import { buttonLabelMatches, describeElement, extractCleanTextFromDom, findClosestMatchingAncestor } from './domText'
 import { isClickableButton } from './waitForElement'
+import { describeSamples, recordSendFailure } from './sendDiagnostics'
 
 const GROK_HOST = 'grok.com'
 const GROK_HOME_URL = `https://${GROK_HOST}/`
 const DEFAULT_INPUT_TIMEOUT_MS = 9000
+const DEFAULT_SEND_BUTTON_TIMEOUT_MS = 5000
+const DEFAULT_LATE_SEND_BUTTON_TIMEOUT_MS = 1500
+const DEFAULT_CONNECTION_CHECK_TIMEOUT_MS = 10000
+const CONNECTION_BLOCKED_PATTERN = /无法开始对话|网络正在阻止|WebSockets 连接|建立 WebSocket/i
 const DEFAULT_CLIPBOARD_TIMEOUT_MS = 900
 const DEFAULT_CLIPBOARD_POLL_MS = 40
 
 const GROK_SELECTORS = {
   queryBar: '.query-bar',
-  chatInput: '[data-testid="chat-input"]',
-  proseMirrorEditor: '[data-testid="chat-input"] .ProseMirror[contenteditable="true"]',
+  // Grok renders the composer as "#chat-input" (id) on desktop and ".query-bar" on mobile; the
+  // [data-testid] variant only exists in older builds.
+  chatInput: '#chat-input, [data-testid="chat-input"]',
+  proseMirrorEditor:
+    '#chat-input .ProseMirror[contenteditable="true"], [data-testid="chat-input"] .ProseMirror[contenteditable="true"], .query-bar .ProseMirror[contenteditable="true"], .ProseMirror[contenteditable="true"][aria-label]',
   fallbackEditor: 'textarea, input, [contenteditable="true"][role="textbox"], [contenteditable="true"]',
   sendButton:
     'button[data-testid="chat-submit"], button[data-testid*="send"], button[data-testid*="submit"], button[type="submit"], [role="button"][aria-label*="Send"], [role="button"][aria-label*="Submit"], [role="button"][data-testid*="send"], [role="button"][data-testid*="submit"]',
   response:
-    '[data-testid="assistant-message"], [data-message-author-role="assistant"], [data-author="assistant"], [class*="assistant-message"], [class*="assistant"] [class*="message"], [class*="assistant"] [class*="message-bubble"]',
-  copyButton: 'button[aria-label*="Copy"], button[data-testid*="copy"], button[title*="Copy"]',
+    '[data-testid="assistant-message"], [data-message-author-role="assistant"], [data-author="assistant"], [class*="assistant-message"]',
+  userMessage: '[data-testid="user-message"], [data-message-author-role="user"], [data-author="user"]',
+  copyButton: 'button[aria-label*="复制响应"], button[aria-label*="复制"], button[aria-label*="Copy"], button[data-testid*="copy"], button[title*="Copy"]',
   activityIndicator: '[aria-busy="true"], [data-testid*="thinking"], [data-testid*="generating"]',
 }
 
@@ -32,12 +41,14 @@ interface GrokAdapterOptions {
   inputTimeoutMs?: number
   clipboardTimeoutMs?: number
   clipboardPollMs?: number
+  connectionCheckTimeoutMs?: number
 }
 
 export function createGrokAdapter(options: GrokAdapterOptions = {}): ChatSiteAdapter {
   const inputTimeoutMs = options.inputTimeoutMs ?? DEFAULT_INPUT_TIMEOUT_MS
   const clipboardTimeoutMs = options.clipboardTimeoutMs ?? DEFAULT_CLIPBOARD_TIMEOUT_MS
   const clipboardPollMs = options.clipboardPollMs ?? DEFAULT_CLIPBOARD_POLL_MS
+  const connectionCheckTimeoutMs = options.connectionCheckTimeoutMs ?? Math.min(inputTimeoutMs, DEFAULT_CONNECTION_CHECK_TIMEOUT_MS)
 
   function currentHref(): string {
     return options.href ?? location.href
@@ -61,16 +72,44 @@ export function createGrokAdapter(options: GrokAdapterOptions = {}): ChatSiteAda
 
   async function fillAndSend(content: string, autoSend = true): Promise<void> {
     const editor = await waitForGrokEditor(inputTimeoutMs)
+    const userMessageCountBefore = document.querySelectorAll(GROK_SELECTORS.userMessage).length
 
     setGrokEditorText(editor, content)
     if (readGrokEditorText(editor) !== content.trim()) {
-      throw new Error('Grok editor did not accept the prompt text')
+      recordSendFailure('grok', { editor, details: { stage: 'write' } })
+      throw new Error('Grok 输入框没有接收提示词（页面可能仍在加载），请在页面上手动确认后重试')
     }
 
     if (!autoSend) return
 
-    const sendButton = await waitForGrokSendButton(editor, inputTimeoutMs)
-    sendButton.click()
+    const promptDispatched = () =>
+      document.querySelectorAll(GROK_SELECTORS.userMessage).length > userMessageCountBefore || isGrokGenerating()
+    const connectionErrorsBefore = countConnectionErrors()
+    const sendButton = await waitForGrokSendButton(editor, Math.min(inputTimeoutMs, DEFAULT_SEND_BUTTON_TIMEOUT_MS))
+
+    if (sendButton) {
+      sendButton.click()
+      if (!(await waitForPromptDispatch({ editor, isDispatched: promptDispatched }))) submitEditorWithKeyboard(editor)
+      await throwIfGrokConnectionBlocked(connectionErrorsBefore, connectionCheckTimeoutMs)
+      return
+    }
+
+    submitEditorWithKeyboard(editor)
+    if (await waitForPromptDispatch({ editor, isDispatched: promptDispatched })) return
+
+    // The composer sometimes enables its submit button only after the draft reaches the site's own
+    // editor state, which can happen after the keyboard fallback ran. Retry the button once.
+    const lateSendButton = await waitForGrokSendButton(editor, DEFAULT_LATE_SEND_BUTTON_TIMEOUT_MS)
+    if (lateSendButton) {
+      lateSendButton.click()
+      if (await waitForPromptDispatch({ editor, isDispatched: promptDispatched })) {
+        await throwIfGrokConnectionBlocked(connectionErrorsBefore, connectionCheckTimeoutMs)
+        return
+      }
+    }
+
+    recordSendFailure('grok', { editor, details: collectSendFailureDetails(editor) })
+    throw new Error('Grok 发送失败：页面里没有可用的发送按钮，回车提交也没有生效，请手动发送一次后点击"重新同步完整回复"')
   }
 
   return {
@@ -162,7 +201,7 @@ function findGrokEditor(): HTMLElement | undefined {
   return undefined
 }
 
-async function waitForGrokSendButton(editor: HTMLElement, timeoutMs: number): Promise<HTMLElement> {
+async function waitForGrokSendButton(editor: HTMLElement, timeoutMs: number): Promise<HTMLElement | undefined> {
   const startedAt = Date.now()
   while (Date.now() - startedAt <= timeoutMs) {
     const button = findGrokSendButton(editor)
@@ -170,7 +209,7 @@ async function waitForGrokSendButton(editor: HTMLElement, timeoutMs: number): Pr
     await waitForNextGrokPoll()
   }
 
-  throw new Error('Grok 发送按钮暂不可用，请稍后重试')
+  return undefined
 }
 
 function findGrokSendButton(editor: HTMLElement): HTMLElement | undefined {
@@ -238,6 +277,44 @@ function isUsableGrokEditor(editor: Element | null | undefined): editor is HTMLE
   if (!isVisibleInteractiveElement(editor)) return false
   const contentEditable = editor.isContentEditable || editor.getAttribute('contenteditable') === 'true'
   return contentEditable || editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement
+}
+
+function countConnectionErrors(): number {
+  const body = document.body
+  if (!body) return 0
+  const text = body.innerText || body.textContent || ''
+  return (text.match(new RegExp(CONNECTION_BLOCKED_PATTERN.source, 'gi')) ?? []).length
+}
+
+/**
+ * Grok streams answers over a WebSocket. Inside an embedded frame the browser (or the network) can
+ * block that socket, which Grok renders as "无法开始对话 / 网络正在阻止 Grok". Without this the prompt
+ * looks submitted and the reply simply never arrives, surfacing only as a generic timeout.
+ */
+async function throwIfGrokConnectionBlocked(errorsBefore: number, timeoutMs: number): Promise<void> {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt <= timeoutMs) {
+    if (countConnectionErrors() > errorsBefore) {
+      recordSendFailure('grok', { details: { stage: 'connection-blocked', errorsBefore } })
+      throw new Error(
+        'Grok 无法建立实时连接：页面提示“网络正在阻止 Grok / WebSocket 连接失败”。请在该角色页面里点“重新开始”，或切换网络后点击“重新回复”',
+      )
+    }
+    if (isGrokGenerating()) return
+    await waitForNextGrokPoll()
+  }
+}
+
+function collectSendFailureDetails(editor: HTMLElement): Record<string, unknown> {
+  return {
+    stage: 'dispatch',
+    sameEditorInDom: editor.isConnected,
+    composerScopes: grokComposerScopes(editor).map(scope => `<${scope.tagName.toLowerCase()} ${scope.className?.toString().slice(0, 40) ?? ''}>`),
+    sendButtonMatches: describeSamples(document.querySelectorAll(GROK_SELECTORS.sendButton)),
+    editorScopeButtons: describeSamples((editor.closest(GROK_SELECTORS.queryBar) ?? document.body).querySelectorAll('button')),
+    proseMirrorMatches: describeSamples(document.querySelectorAll(GROK_SELECTORS.proseMirrorEditor), 4),
+    userMessageCount: document.querySelectorAll(GROK_SELECTORS.userMessage).length,
+  }
 }
 
 function collectPromptDiagnostics(): Record<string, unknown> {

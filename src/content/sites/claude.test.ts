@@ -57,6 +57,22 @@ describe('Claude site adapter', () => {
     expect(clickListener).toHaveBeenCalledTimes(1)
   })
 
+  it('reads only the reply prose from the current assistant message container', () => {
+    document.body.innerHTML = `
+      <div data-cds="AssistantMessage" data-testid="assistant-message">
+        <h3 class="sr-only" data-find-omitted="">Claude 已回复：收到</h3>
+        <div data-cds="Prose" class="prose"><p>收到</p></div>
+        <div data-testid="message-actions" role="toolbar"><button aria-label="复制">复制</button></div>
+        <time datetime="2026-10-31T13:00:00.000Z">3分钟前</time>
+      </div>
+    `
+    const adapter = createClaudeAdapter()
+    const containers = adapter.getResponseContainers()
+
+    expect(containers).toHaveLength(1)
+    expect(adapter.readResponseText?.(containers[0])).toBe('收到')
+  })
+
   it('reads Claude markdown replies without action button text', () => {
     document.body.innerHTML = `
       <div class="group">
@@ -123,4 +139,31 @@ describe('Claude site adapter', () => {
 
     expect(createClaudeAdapter().readResponseMarkdown?.(response)).toBe('## 方案\n\n**结论**：可以做\n\n- 先做复制\n- 再做兜底\n\n```\nconst ok = true\n```')
   })
+
+  it('clicks the current Claude composer submit control', async () => {
+    document.body.innerHTML = `
+      <div>
+        <div contenteditable="true" role="textbox" aria-label="输入您发送给 Claude 的提示词"><p><br></p></div>
+        <button type="button" data-testid="chat-input-send" aria-label="发送消息"></button>
+      </div>
+    `
+    const clickListener = vi.fn()
+    document.querySelector<HTMLButtonElement>('button')!.addEventListener('click', clickListener)
+
+    await createClaudeAdapter().fillAndSend('你好 Claude', true)
+
+    expect(clickListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains the Cloudflare human check instead of reporting a missing element', async () => {
+    document.body.innerHTML = `
+      <div id="challenge-page">
+        <iframe src="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile"></iframe>
+        <p>正在进行安全验证，请验证您是真人</p>
+      </div>
+    `
+
+    await expect(createClaudeAdapter({ inputTimeoutMs: 80 }).fillAndSend('hello', true)).rejects.toThrow(/人机验证/)
+  })
+
 })

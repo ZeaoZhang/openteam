@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { createChatGptAdapter } from './chatgpt'
+import { readEditorText } from './contentEditable'
 
 describe('ChatGPT site adapter', () => {
   it('extracts ChatGPT conversation ids and normalized safe urls', () => {
@@ -416,4 +417,52 @@ describe('ChatGPT site adapter', () => {
 
     expect(createChatGptAdapter().isGenerating()).toBe(true)
   })
+
+  it('fills the current ChatGPT composer rendered inside [data-composer-body]', async () => {
+    document.body.innerHTML = `
+      <div data-composer-body>
+        <div class="ProseMirror" contenteditable="true" role="textbox" aria-label="询问 ChatGPT"><p><br></p></div>
+        <button type="button" aria-label="添加文件等内容"></button>
+        <button type="button" aria-label="选择 ChatGPT 模型"></button>
+        <button type="submit" aria-label="发送"></button>
+      </div>
+    `
+    const editor = document.querySelector<HTMLElement>('[data-composer-body] .ProseMirror')!
+    const attachButton = document.querySelectorAll<HTMLButtonElement>('button')[0]!
+    const modelButton = document.querySelectorAll<HTMLButtonElement>('button')[1]!
+    const sendButton = document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+    const attachListener = vi.fn()
+    const modelListener = vi.fn()
+    const clickListener = vi.fn()
+    attachButton.addEventListener('click', attachListener)
+    modelButton.addEventListener('click', modelListener)
+    sendButton.addEventListener('click', event => {
+      event.preventDefault()
+      clickListener()
+    })
+
+    await createChatGptAdapter().fillAndSend('新界面提示词', true)
+
+    expect(editor.textContent).toBe('新界面提示词')
+    expect(clickListener).toHaveBeenCalledTimes(1)
+    expect(attachListener).not.toHaveBeenCalled()
+    expect(modelListener).not.toHaveBeenCalled()
+  })
+
+  it('prefers the visible composer over a hidden legacy editor', async () => {
+    document.body.innerHTML = `
+      <div style="display: none;"><div id="prompt-textarea" class="ProseMirror" contenteditable="true" role="textbox"></div></div>
+      <div data-composer-body>
+        <div class="ProseMirror" contenteditable="true" role="textbox"><p><br></p></div>
+      </div>
+    `
+    const hiddenEditor = document.querySelector<HTMLElement>('#prompt-textarea')!
+    const visibleEditor = document.querySelector<HTMLElement>('[data-composer-body] .ProseMirror')!
+
+    await createChatGptAdapter().fillAndSend('只写可见输入框', false)
+
+    expect(readEditorText(visibleEditor)).toBe('只写可见输入框')
+    expect(hiddenEditor.textContent).toBe('')
+  })
+
 })

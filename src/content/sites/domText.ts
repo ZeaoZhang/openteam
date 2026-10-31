@@ -28,6 +28,10 @@ export function extractCleanTextFromDom(node: Node, options: { skipTags: Set<str
 
     const element = current as Element
     if (element.getAttribute('aria-hidden') === 'true') return
+    // Screen-reader-only headings ("ChatGPT 说：", "Claude 已回复：…") are part of the message container
+    // but never part of the reply text.
+    if (element.hasAttribute('data-find-omitted')) return
+    if (element.classList?.contains('sr-only')) return
     if (options.skipTags.has(element.tagName)) return
     if (blockTags.has(element.tagName)) buffer.push('\n')
 

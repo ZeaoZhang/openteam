@@ -1,4 +1,6 @@
-const SKIP_SELECTORS = 'button, svg, style, script, textarea, mat-icon'
+// Screen-reader headings ("ChatGPT 说：", "Claude 已回复：…"), action toolbars and relative timestamps
+// live inside the message container but are not part of the reply text.
+const SKIP_SELECTORS = 'button, svg, style, script, textarea, mat-icon, time, [data-find-omitted], .sr-only'
 
 export function extractMarkdownFromDom(node: Node): string {
   return normalizeMarkdown(block(node))
