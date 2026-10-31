@@ -297,7 +297,7 @@ async function throwIfGrokConnectionBlocked(errorsBefore: number, timeoutMs: num
     if (countConnectionErrors() > errorsBefore) {
       recordSendFailure('grok', { details: { stage: 'connection-blocked', errorsBefore } })
       throw new Error(
-        'Grok 无法建立实时连接：页面提示“网络正在阻止 Grok / WebSocket 连接失败”。请在该角色页面里点“重新开始”，或切换网络后点击“重新回复”',
+        'Grok 无法建立实时连接：页面提示“网络正在阻止 Grok / WebSocket 连接失败”。请在该角色页面里点“重新开始”后重试；若反复失败，说明这个嵌入页面被浏览器的第三方存储策略限制，请在浏览器标签页里直接使用 grok.com，或把该角色换成其他站点。',
       )
     }
     if (isGrokGenerating()) return
