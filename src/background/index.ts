@@ -128,6 +128,77 @@ function sendResponseSafely(sendResponse: (response?: unknown) => void, response
   }
 }
 
+// --- DSH browser-control bridge -------------------------------------------
+// Lets the dsh-browser-control extension drive this extension's own pages via
+// chrome.debugger. Chrome forbids cross-extension chrome-extension:// access,
+// so the control must be handed over from inside OpenTeam itself.
+const DSH_BROWSER_EXTENSION_ID = 'ldcmjcmnjgdfiifmbjbjegncfdgpnlbp'
+const DSH_BROWSER_BRIDGE_MESSAGE = 'DSH_BROWSER_BRIDGE'
+
+interface DshBrowserBridgeMessage {
+  type?: string
+  tabId?: number
+  expression?: string
+  method?: string
+  params?: Record<string, unknown>
+}
+
+function attachDebugger(target: chrome.debugger.Debuggee): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.attach(target, '1.3', () => {
+      const message = chrome.runtime.lastError?.message
+      if (message) reject(new Error(message))
+      else resolve()
+    })
+  })
+}
+
+function detachDebugger(target: chrome.debugger.Debuggee): Promise<void> {
+  return new Promise(resolve => {
+    chrome.debugger.detach(target, () => resolve())
+  })
+}
+
+function sendDebuggerCommand(target: chrome.debugger.Debuggee, method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.sendCommand(target, method, params, result => {
+      const message = chrome.runtime.lastError?.message
+      if (message) reject(new Error(message))
+      else resolve(result)
+    })
+  })
+}
+
+chrome.runtime.onMessageExternal.addListener((message: DshBrowserBridgeMessage, sender, sendResponse) => {
+  if (sender.id !== DSH_BROWSER_EXTENSION_ID) return
+  if (message?.type !== DSH_BROWSER_BRIDGE_MESSAGE) return
+  if (typeof message.tabId !== 'number') {
+    sendResponse({ ok: false, error: 'missing tabId' })
+    return
+  }
+  const target: chrome.debugger.Debuggee = { tabId: message.tabId }
+  void (async () => {
+    try {
+      await attachDebugger(target)
+      try {
+        const result = typeof message.method === 'string'
+          ? await sendDebuggerCommand(target, message.method, message.params ?? {})
+          : await sendDebuggerCommand(target, 'Runtime.evaluate', {
+            expression: typeof message.expression === 'string' ? message.expression : '',
+            awaitPromise: true,
+            returnByValue: true,
+          })
+        sendResponse({ ok: true, result })
+      } finally {
+        await detachDebugger(target)
+      }
+    } catch (error) {
+      sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  })()
+  return true
+})
+
 const routeMessage = createMessageRouter([
   { type: 'GROUP_STORE_GET', handler: handleStoreGet },
   ...createChatHandlers({ broadcastStoreUpdated, getChatStatusFromRoles, imageAttachments: imageAttachmentRepository, log, newId, now, runtimeFrames }),

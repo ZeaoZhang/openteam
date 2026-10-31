@@ -15,7 +15,8 @@
     "alarms",
     "declarativeNetRequest",
     "clipboardRead",
-    "clipboardWrite"
+    "clipboardWrite",
+    "debugger"
   ],
   "host_permissions": [
     "https://gemini.google.com/*",
