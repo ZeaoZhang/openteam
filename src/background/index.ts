@@ -15,7 +15,9 @@ import { createMessageRouter } from './messageRouter'
 import { createExternalModelHandlers } from './externalModelHandlers'
 import { createExternalModelClient } from './externalModelClient'
 import { createPromptSender } from './promptDelivery'
+import { createHostModeHandlers } from './hostModeHandlers'
 import { createRoleHandlers } from './roleHandlers'
+import { createRoleTabHost } from './roleTabHost'
 import { createOrchestrationHandlers, type OrchestrationAutoStreamMessage } from './orchestrationHandlers'
 import { createRuntimeFrameRegistry } from './runtimeFrames'
 import { createSitePromptDeliveryLimiter } from './sitePromptDeliveryLimiter'
@@ -35,6 +37,7 @@ const CONTROL_KEEPALIVE_PERIOD_MINUTES = 0.4
 const sendPrompt = createPromptSender({ log })
 const promptDeliveryLimiter = createSitePromptDeliveryLimiter({ log })
 const externalModelClient = createExternalModelClient()
+const roleTabHost = createRoleTabHost({ log })
 const imageAttachmentRepository = createIndexedDbImageAttachmentRepository()
 const imageAttachments = createImageAttachmentService({
   fetchImage(url, init) {
@@ -205,6 +208,7 @@ const routeMessage = createMessageRouter([
   { type: 'GROUP_SETTINGS_UPDATE', handler: handleSettingsUpdate },
   ...createExternalModelHandlers({ broadcastStoreUpdated, externalModelClient, newId, now }),
   ...createRoleHandlers({ broadcastStoreUpdated, externalModelClient, log, newId, now, runtimeFrames, sendPrompt }),
+  ...createHostModeHandlers({ broadcastStoreUpdated, log, now, roleTabHost, runtimeFrames }),
   ...createOrchestrationHandlers({ broadcastStoreUpdated, broadcastAutoGenerateStream, externalModelClient, getChatStatusFromRoles, log, newId, now, promptDeliveryLimiter, requestRoleRecovery, runtimeFrames, sendPrompt }),
   ...createMessageHandlers({ broadcastStoreUpdated, externalModelClient, getChatStatusFromRoles, imageAttachments, log, newId, now, promptDeliveryLimiter, requestRoleRecovery, runtimeFrames, sendError, sendPrompt, sendRoleMessage }),
 ])
@@ -359,18 +363,29 @@ chrome.tabs.onRemoved.addListener(tabId => {
   try {
     forgetHostTab(tabId)
     const removed = runtimeFrames.removeTab(tabId)
-    if (removed.length === 0) return
 
     mutateStore(store => {
       const timestamp = now()
+      let changed = false
       for (const binding of removed) {
         const role = store.rolesById[binding.roleId]
         if (!role || role.chatId !== binding.chatId || role.status === 'thinking') continue
         role.status = 'loading'
         role.updatedAt = timestamp
+        changed = true
       }
+      for (const role of Object.values(store.rolesById)) {
+        if (role.hostedTabId !== tabId) continue
+        delete role.hostedTabId
+        if (role.status !== 'thinking') {
+          role.status = 'loading'
+          role.updatedAt = timestamp
+        }
+        changed = true
+      }
+      return changed
     })
-      .then(({ store }) => broadcastStoreUpdated(store))
+      .then(({ store, result }) => (result ? broadcastStoreUpdated(store) : undefined))
       .catch(error => logBackgroundFailure('tab-removed:update-failed', error, { tabId }))
   } catch (error) {
     logBackgroundFailure('tab-removed:failed', error, { tabId })

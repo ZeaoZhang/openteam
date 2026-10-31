@@ -14,6 +14,7 @@ const DEFAULT_SEND_BUTTON_TIMEOUT_MS = 5000
 const DEFAULT_LATE_SEND_BUTTON_TIMEOUT_MS = 1500
 const DEFAULT_CONNECTION_CHECK_TIMEOUT_MS = 10000
 const CONNECTION_BLOCKED_PATTERN = /无法开始对话|网络正在阻止|WebSockets 连接|建立 WebSocket/i
+const CAPACITY_LIMITED_PATTERN = /需求量高|使用人数较多|请稍后再试|升级到 Super/i
 const DEFAULT_CLIPBOARD_TIMEOUT_MS = 900
 const DEFAULT_CLIPBOARD_POLL_MS = 40
 
@@ -107,6 +108,15 @@ export function createGrokAdapter(options: GrokAdapterOptions = {}): ChatSiteAda
         return
       }
     }
+
+    if (countCapacityErrors() > 0) {
+      recordSendFailure('grok', { editor, details: { stage: 'capacity-limited' } })
+      throw new Error('Grok 当前使用人数较多，站点提示“需求量高，请稍后再试”。请稍等几分钟后点击“重新回复”，或升级 Grok 订阅后再试')
+    }
+
+    // The prompt sometimes leaves the composer without our button press landing (the site clears the
+    // draft itself), so treat a new user bubble as a successful dispatch instead of a send failure.
+    if (promptDispatched()) return
 
     recordSendFailure('grok', { editor, details: collectSendFailureDetails(editor) })
     throw new Error('Grok 发送失败：页面里没有可用的发送按钮，回车提交也没有生效，请手动发送一次后点击"重新同步完整回复"')
@@ -279,6 +289,13 @@ function isUsableGrokEditor(editor: Element | null | undefined): editor is HTMLE
   return contentEditable || editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement
 }
 
+function countCapacityErrors(): number {
+  const body = document.body
+  if (!body) return 0
+  const text = body.innerText || body.textContent || ''
+  return (text.match(new RegExp(CAPACITY_LIMITED_PATTERN.source, 'gi')) ?? []).length
+}
+
 function countConnectionErrors(): number {
   const body = document.body
   if (!body) return 0
@@ -294,6 +311,10 @@ function countConnectionErrors(): number {
 async function throwIfGrokConnectionBlocked(errorsBefore: number, timeoutMs: number): Promise<void> {
   const startedAt = Date.now()
   while (Date.now() - startedAt <= timeoutMs) {
+    if (countCapacityErrors() > 0) {
+      recordSendFailure('grok', { details: { stage: 'capacity-limited', errorsBefore } })
+      throw new Error('Grok 当前使用人数较多，站点提示“需求量高，请稍后再试”。请稍等几分钟后点击“重新回复”，或升级 Grok 订阅后再试')
+    }
     if (countConnectionErrors() > errorsBefore) {
       recordSendFailure('grok', { details: { stage: 'connection-blocked', errorsBefore } })
       throw new Error(

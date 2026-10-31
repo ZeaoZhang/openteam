@@ -1,6 +1,6 @@
 import type { BackgroundToRoleMessage, RoleToBackgroundMessage } from '../group/runtimeProtocol'
 import { createConversationMonitor, type ConversationMonitor } from './conversationMonitor'
-import { registerFrameRoleHandshake } from './frameHandshake'
+import { registerFrameRoleHandshake, registerHostedRoleAttach } from './frameHandshake'
 import { isDirectEmbeddedFrame, isEmbeddedFrame } from './frameEnvironment'
 import { waitBeforePromptInput, PROMPT_INPUT_DELAY_MS } from './promptDelay'
 import { promptStatusMessage } from './promptStatus'
@@ -320,6 +320,13 @@ function startOpenTeam(): void {
 
   conversationMonitor?.start()
   replyObserver?.startReplyReporting()
+  registerHostedRoleAttach({
+    siteAdapter,
+    roleSession,
+    log,
+    seedStoredRoleReplies: replies => replyObserver?.seedStoredRoleReplies(replies),
+    sendRuntimeMessage: message => sendBackgroundMessage(message),
+  })
   startStatusHeartbeat()
 }
 

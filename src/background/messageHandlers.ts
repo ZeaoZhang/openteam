@@ -422,7 +422,7 @@ export function createMessageHandlers(deps: MessageHandlersDependencies): Backgr
     const roleId = requireString(message.roleId, '缺少人员 ID')
     const messageId = requireString(message.messageId, '缺少消息 ID')
     const binding = deps.runtimeFrames.getByRole(chatId, roleId)
-    if (!binding?.ready) throw new Error('人员 iframe 尚未就绪，请先恢复人员')
+    if (!binding?.ready) throw new Error('人员页面尚未就绪，请先恢复人员')
 
     const { store, result } = await mutateStore(store => {
       const chat = requireChat(store, chatId)

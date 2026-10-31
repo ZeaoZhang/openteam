@@ -172,7 +172,7 @@ describe('orchestration runtime', () => {
 
     const started = await harness.startOrchestrationRun(harness.deps, { chatId: 'chat-1', flowId: 'flow-1', task: 'Ship the plan' })
 
-    expect(requestRoleRecovery).toHaveBeenCalledWith('chat-1', 'role-1', '人员 iframe 尚未就绪，请先恢复人员')
+    expect(requestRoleRecovery).toHaveBeenCalledWith('chat-1', 'role-1', '人员页面尚未就绪，请先恢复人员')
     expect(waitForRetry).not.toHaveBeenCalled()
     expect(harness.sendPrompt).toHaveBeenCalledTimes(1)
     const finalStore = await harness.getStore()

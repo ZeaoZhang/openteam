@@ -60,7 +60,7 @@ export function shouldAutoReconnectRole(role: Pick<GroupRole, 'modelSource' | 's
 }
 
 export function isUnavailableRolesError(message: string): boolean {
-  return message.includes('以下人员不可用，请等待或恢复') || message.includes('人员 iframe 尚未就绪')
+  return message.includes('以下人员不可用，请等待或恢复') || message.includes('人员页面尚未就绪') || message.includes('人员 iframe 尚未就绪')
 }
 
 export interface ChatStartupNotice {

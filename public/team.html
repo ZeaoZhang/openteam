@@ -56,6 +56,11 @@
             </div>
             <button id="agent-control-toggle" class="btn settings-toggle" type="button" aria-pressed="false">本机智能体控制：关闭</button>
             <p id="agent-control-status" class="tiny settings-hint" data-control-state="disabled">端口 19305，仅允许本机连接。</p>
+            <div class="settings-section">
+              <div class="settings-label">连接检测</div>
+              <button id="connection-check" class="btn settings-toggle" type="button">检测各成员连接</button>
+              <div id="connection-check-results" class="settings-conn-list" hidden></div>
+            </div>
           </div>
         </div>
       </nav>

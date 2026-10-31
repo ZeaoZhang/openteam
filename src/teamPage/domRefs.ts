@@ -37,6 +37,8 @@ export interface TeamPageDomRefs {
   languageZhEl: HTMLButtonElement
   agentControlToggleEl: HTMLButtonElement
   agentControlStatusEl: HTMLElement
+  connectionCheckEl: HTMLButtonElement
+  connectionCheckResultsEl: HTMLElement
   themeLightEl: HTMLButtonElement
   themeDarkEl: HTMLButtonElement
   openAllNotesEl: HTMLButtonElement
@@ -201,6 +203,8 @@ export function createTeamPageDomRefs(): TeamPageDomRefs {
     languageZhEl: requireElement<HTMLButtonElement>('#language-zh'),
     agentControlToggleEl: requireElement<HTMLButtonElement>('#agent-control-toggle'),
     agentControlStatusEl: requireElement<HTMLElement>('#agent-control-status'),
+    connectionCheckEl: requireElement<HTMLButtonElement>('#connection-check'),
+    connectionCheckResultsEl: requireElement<HTMLElement>('#connection-check-results'),
     themeLightEl: requireElement<HTMLButtonElement>('#theme-light'),
     themeDarkEl: requireElement<HTMLButtonElement>('#theme-dark'),
     openAllNotesEl: requireElement<HTMLButtonElement>('#open-all-notes'),

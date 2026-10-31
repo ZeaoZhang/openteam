@@ -83,7 +83,7 @@ export function createRolePanelView(deps: RolePanelViewDependencies): RolePanelV
 
     const meta = document.createElement('div')
     meta.className = 'chat-row tiny role-meta'
-    meta.append(roleSiteControl(role), roleContextProgress(role, ui), roleConnectionStatus(role, ui))
+    meta.append(roleSiteControl(role), roleHostModeControl(role), roleContextProgress(role, ui), roleConnectionStatus(role, ui))
     main.append(row, description, meta)
 
     const actions = document.createElement('div')
@@ -193,6 +193,11 @@ export function createRolePanelView(deps: RolePanelViewDependencies): RolePanelV
     button.addEventListener('click', event => {
       event.stopPropagation()
       if (role.modelSource === 'external') return
+      if (role.hostMode === 'tab') {
+        deps.runCommand('GROUP_ROLE_HOST_TAB_FOCUS', { chatId: role.chatId, roleId: role.id })
+          .catch(error => deps.showError(error instanceof Error ? error.message : String(error)))
+        return
+      }
       deps.iframeHost.recoverRole(role)
       deps.runCommand('GROUP_ROLE_RECOVER', { chatId: role.chatId, roleId: role.id })
         .catch(error => deps.showError(error instanceof Error ? error.message : String(error)))
@@ -209,6 +214,11 @@ export function createRolePanelView(deps: RolePanelViewDependencies): RolePanelV
     button.textContent = '↗'
     button.addEventListener('click', event => {
       event.stopPropagation()
+      if (role.hostMode === 'tab') {
+        deps.runCommand('GROUP_ROLE_HOST_TAB_FOCUS', { chatId: role.chatId, roleId: role.id })
+          .catch(error => deps.showError(error instanceof Error ? error.message : String(error)))
+        return
+      }
       deps.focusRoleFrame(role.chatId, role.id)
     })
     return button
@@ -229,6 +239,38 @@ export function createRolePanelView(deps: RolePanelViewDependencies): RolePanelV
       kickRoleFromChat(role).catch(error => deps.showError(error instanceof Error ? error.message : String(error)))
     })
     return button
+  }
+
+  function roleHostModeControl(role: GroupRole): HTMLElement {
+    const wrap = document.createElement('span')
+    wrap.className = 'role-meta-item role-host-mode'
+    const pill = document.createElement('button')
+    pill.type = 'button'
+    const tabMode = role.hostMode === 'tab'
+    pill.className = `site-pill host-mode-pill ${tabMode ? 'host-mode-tab' : 'host-mode-iframe'}`
+    pill.dataset.roleHostMode = role.id
+    pill.textContent = tabMode ? ui('独立标签页') : ui('嵌入窗口')
+    pill.title = role.modelSource === 'external'
+      ? ui('API 成员不使用网页承载')
+      : tabMode
+        ? ui('点击改为嵌入在团队页里')
+        : ui('点击改为在独立标签页里运行，绕开站点对嵌入窗口的限制')
+    pill.setAttribute('aria-label', language() === 'en'
+      ? `${role.name}: ${tabMode ? 'hosted in a tab' : 'embedded in the team page'}. Switch hosting mode.`
+      : `${role.name}：${tabMode ? '标签页承载' : '嵌入承载'}。切换承载方式。`)
+    if (role.modelSource === 'external') {
+      pill.disabled = true
+      wrap.append(pill)
+      return wrap
+    }
+    pill.addEventListener('click', event => {
+      event.stopPropagation()
+      const nextHostMode = tabMode ? 'iframe' : 'tab'
+      deps.runCommand('GROUP_ROLE_HOST_MODE_SET', { chatId: role.chatId, roleId: role.id, hostMode: nextHostMode })
+        .catch(error => deps.showError(error instanceof Error ? error.message : String(error)))
+    })
+    wrap.append(pill)
+    return wrap
   }
 
   function roleSiteControl(role: GroupRole): HTMLElement {

@@ -258,6 +258,27 @@ describe('Grok site adapter', () => {
     expect(attachListener).not.toHaveBeenCalled()
   })
 
+  it('reports a rate limit when Grok is saturated instead of blaming the send button', async () => {
+    document.body.innerHTML = `
+      <div class="query-bar">
+        <div class="tiptap ProseMirror" contenteditable="true" aria-label="向 Grok 提任何问题"><p><br></p></div>
+        <button type="submit" data-testid="chat-submit" aria-label="提交"></button>
+      </div>
+    `
+    const editor = document.querySelector<HTMLElement>('.ProseMirror')!
+    document.querySelector<HTMLButtonElement>('[data-testid="chat-submit"]')!.addEventListener('click', event => {
+      event.preventDefault()
+      editor.replaceChildren()
+      const card = document.createElement('div')
+      card.textContent = '需求量高 Grok 当前使用人数较多，请稍后再试，或升级你的订阅方案以获得优先使用权'
+      document.body.append(card)
+    })
+
+    await expect(createGrokAdapter({ inputTimeoutMs: 250, connectionCheckTimeoutMs: 400 }).fillAndSend('hi', true)).rejects.toThrow(
+      /Grok 当前使用人数较多/,
+    )
+  })
+
   it('reports an actionable error when Grok cannot open its live connection', async () => {
     document.body.innerHTML = `
       <div class="query-bar">

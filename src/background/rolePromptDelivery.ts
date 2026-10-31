@@ -65,7 +65,7 @@ export function prepareRolePromptDelivery(input: PrepareRolePromptDeliveryInput)
   }
 
   const binding = input.runtimeFrames.getByRole(input.chat.id, input.role.id)
-  if (!binding?.ready) throw new Error('人员 iframe 尚未就绪，请先恢复人员')
+  if (!binding?.ready) throw new Error('人员页面尚未就绪，请先恢复人员')
   const unsyncedContext = buildUnsyncedContext(input.chat, input.role, input.messages, input.userMessage, maxContextChars, input.store.settings.language)
   const content = buildPrompt({
     chat: input.chat,

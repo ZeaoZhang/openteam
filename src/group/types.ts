@@ -5,6 +5,12 @@ export type RoomMode = 'independent' | 'collaborative'
 export type ChatSite = 'gemini' | 'chatgpt' | 'claude' | 'deepseek' | 'grok'
 export type OpenTeamLanguage = 'en' | 'zh-CN'
 export type RoleModelSource = 'site' | 'external'
+/**
+ * Determines where a role's chat page runs: embedded in the team page
+ * (`iframe`, default) or in a standalone browser tab (`tab`). Tab hosting
+ * bypasses the restrictions sites apply inside third-party iframes.
+ */
+export type RoleHostMode = 'iframe' | 'tab'
 export type ExternalModelFormat = 'openai' | 'anthropic'
 
 export type ChatStatus = 'draft' | 'initializing' | 'ready' | 'running' | 'error'
@@ -245,6 +251,10 @@ export interface GroupRole {
   modelSource?: RoleModelSource
   chatSite?: ChatSite
   externalModelId?: string
+  /** How the role's chat page is hosted; defaults to `iframe` when unset. */
+  hostMode?: RoleHostMode
+  /** Browser tab hosting this role when `hostMode` is `tab` (may go stale). */
+  hostedTabId?: number
   name: string
   description?: string
   systemPrompt?: string

@@ -149,6 +149,8 @@ describe('team.html chat creation UI', () => {
     expect(html).toContain('id="settings-button"')
     expect(html).toContain('id="settings-menu"')
     expect(html).toContain('id="agent-control-toggle"')
+    expect(html).toContain('id="connection-check"')
+    expect(html).toContain('id="connection-check-results"')
     expect(html).toContain('本机智能体控制')
     expect(html).toContain('id="open-people-library"')
     expect(html).not.toContain('id="default-site-gemini"')

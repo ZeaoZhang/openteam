@@ -5259,3 +5259,45 @@ select:focus {
     min-height: 40px;
   }
 }
+
+.settings-conn-list {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.settings-conn-row {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-conn-row[data-state="ready"] {
+  border-left: 3px solid #28c840;
+}
+
+.settings-conn-row[data-state="pending"] {
+  border-left: 3px solid #f0b429;
+}
+
+.settings-conn-row[data-state="error"] {
+  border-left: 3px solid #ff5f57;
+}
+
+.settings-conn-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.settings-conn-meta,
+.settings-conn-note {
+  opacity: 0.78;
+}

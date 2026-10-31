@@ -26,6 +26,7 @@ import { createThemeController } from './themeController'
 import { createTeamUiController } from './teamUiController'
 import { emptyCard, getChatRecentSummary as getStoreChatRecentSummary, messageTitle, roleAvatarLabel, roleToneClass } from './viewHelpers'
 import { agentControlStatusState, agentControlStatusText } from './agentControlStatusView'
+import type { ConnectionReport } from '../background/hostModeHandlers'
 import { createIndexedDbImageAttachmentRepository } from '../shared/imageAttachmentRepository'
 
 const appState = createTeamPageState()
@@ -37,7 +38,7 @@ const teamDomRefs = createTeamPageDomRefs()
 const { appShellEl, closeWindowEl, toggleWindowSizeEl, toggleFullscreenEl, storeSummaryEl, chatListEl, chatTitleEl, chatSubtitleEl, chatStatusEl, messagesEl } = teamDomRefs
 const { roleSummaryEl, roleListEl, roleTemplateSelectEl, templateListEl, targetPreviewEl, busyPreviewEl, composerFormEl, sendButtonEl } = teamDomRefs
 const { messageInputEl, referenceDraftEl, mentionPanelEl, errorEl, newChatNameEl, createChatFormEl, quickCreateChatEl } = teamDomRefs
-const { templateNameEl, templateDescriptionEl, templatePromptEl, templateAiDescriptionEl, generateTemplatePersonaEl, templatePersonaGenerationStatusEl, templateFormTitleEl, settingsButtonEl, settingsMenuEl, languageEnEl, languageZhEl, agentControlToggleEl, agentControlStatusEl, themeLightEl, themeDarkEl } = teamDomRefs
+const { templateNameEl, templateDescriptionEl, templatePromptEl, templateAiDescriptionEl, generateTemplatePersonaEl, templatePersonaGenerationStatusEl, templateFormTitleEl, settingsButtonEl, settingsMenuEl, languageEnEl, languageZhEl, agentControlToggleEl, agentControlStatusEl, connectionCheckEl, connectionCheckResultsEl, themeLightEl, themeDarkEl } = teamDomRefs
 const { openAllNotesEl, closeAllNotesEl, allNotesModalEl, allNotesListEl, allNotesActiveTitleEl, allNotesActiveMetaEl, allNotesEditorEl } = teamDomRefs
 const { allNoteBoldEl, allNoteItalicEl, allNoteStrikeEl, allNoteBulletListEl, allNoteOrderedListEl, allNoteUndoEl, allNoteRedoEl } = teamDomRefs
 const { openPeopleLibraryEl, openExternalModelsEl, openOrchestrationEl, closeOrchestrationEl, orchestrationModalEl, orchestrationAutoModalEl, orchestrationTaskEl, autoOrchestrationEl, openOrchestrationTemplateEl, orchestrationTemplateModalEl, closeOrchestrationTemplateEl, orchestrationTemplateContentEl, closeAutoOrchestrationEl, orchestrationAutoContentEl, orchestrationPeopleListEl, arrangeOrchestrationEl, orchestrationCanvasEl, orchestrationHintEl, orchestrationStageSettingsEl, orchestrationReviewSettingsEl, orchestrationMaxRoundsEl, saveOrchestrationEl, runOrchestrationEl, closeExternalModelsEl, externalModelsModalEl, externalModelsListEl, externalModelFormEl, externalModelIdEl, externalModelNameEl, externalModelFormatEl, externalModelBaseUrlEl, externalModelApiKeyEl, externalModelModelNameEl, resetExternalModelFormEl, closePeopleLibraryEl, peopleLibraryModalEl, personTemplateModalEl, addPersonModalEl, temporaryPersonModalEl } = teamDomRefs
@@ -519,13 +520,39 @@ function syncIframeHost(): void {
   if (!chat) return
   iframeHost.setEnabled(true)
   const roles = getCurrentRoles()
-  const siteRoles = roles.filter(role => role.modelSource !== 'external')
+  const siteRoles = roles.filter(role => role.modelSource !== 'external' && role.hostMode !== 'tab')
   log.debug('iframe-sync:activate-chat', {
     chatId: chat.id,
     roleIds: siteRoles.map(role => role.id),
     roleStatuses: roles.map(role => ({ id: role.id, name: role.name, status: role.status, conversationUrl: role.geminiConversationUrl })),
   })
   iframeHost.activateChat({ ...chat, roleIds: siteRoles.map(role => role.id) }, siteRoles)
+  syncHostedRoles(chat.id)
+}
+
+let hostedRolesSyncAt = 0
+const HOSTED_ROLES_SYNC_THROTTLE_MS = 3000
+
+/**
+ * Tab-hosted members can miss their binding after an extension reload or a background restart. Ask
+ * the background to re-attach any hosted tab that lost its binding; the content script answers with
+ * a fresh TEAM_FRAME_ROLE_READY.
+ */
+function syncHostedRoles(chatId: string): void {
+  if (!getCurrentRoles().some(role => role.hostMode === 'tab' && role.modelSource !== 'external')) return
+  const now = Date.now()
+  if (now - hostedRolesSyncAt < HOSTED_ROLES_SYNC_THROTTLE_MS) return
+  hostedRolesSyncAt = now
+  void sendRuntimeMessage<{ attached: string[]; missing: string[] }>('GROUP_HOSTED_ROLES_SYNC', { chatId })
+    .then(response => {
+      if (!response?.ok) return
+      const attached = response.data?.attached ?? []
+      if (attached.length > 0) {
+        log.info('hosted-roles:synced', { chatId, attached })
+        refreshStore(false)
+      }
+    })
+    .catch(error => log.warn('hosted-roles:sync-failed', { error: error instanceof Error ? error.message : String(error) }))
 }
 
 function handlePrimaryModeChange(isPrimary: boolean): void {
@@ -560,7 +587,96 @@ function renderAgentControlSettings(): void {
   agentControlStatusEl.textContent = agentControlStatusText(store, appState.controlStatus)
 }
 
+async function runConnectionCheck(): Promise<void> {
+  const chat = getCurrentChat()
+  connectionCheckEl.disabled = true
+  connectionCheckResultsEl.hidden = false
+  connectionCheckResultsEl.replaceChildren(connectionNote('检测中…'))
+  try {
+    const response = await sendRuntimeMessage<ConnectionReport>('GROUP_CONNECTION_CHECK', chat ? { chatId: chat.id } : {})
+    if (response.ok === false) throw new Error(response.error || '连接检测失败')
+    if (!response.data) throw new Error('连接检测返回格式无效')
+    renderConnectionReport(response.data)
+  } catch (error) {
+    connectionCheckResultsEl.replaceChildren(connectionNote(error instanceof Error ? error.message : String(error)))
+  } finally {
+    connectionCheckEl.disabled = false
+  }
+}
+
+function renderConnectionReport(report: ConnectionReport): void {
+  const rows: HTMLElement[] = []
+  if (!report.roles || report.roles.length === 0) {
+    rows.push(connectionNote('当前群聊里还没有可检测的成员。'))
+  } else {
+    for (const role of report.roles) {
+      const row = document.createElement('div')
+      const state = role.ready ? 'ready' : role.status === 'error' ? 'error' : 'pending'
+      row.className = 'settings-conn-row'
+      row.dataset.state = state
+
+      const title = document.createElement('div')
+      title.className = 'settings-conn-title'
+      const name = document.createElement('span')
+      name.textContent = `${role.name} · ${role.siteLabel}`
+      const badge = document.createElement('span')
+      badge.textContent = role.ready ? '已连接' : role.status === 'error' ? '异常' : '未就绪'
+      title.append(name, badge)
+
+      const meta = document.createElement('div')
+      meta.className = 'settings-conn-meta'
+      meta.textContent = role.hostMode === 'tab'
+        ? `承载方式：独立标签页${role.tabAlive ? '' : '（标签页已关闭）'}`
+        : '承载方式：团队页嵌入窗口'
+
+      row.append(title, meta)
+      if (role.detail) {
+        const note = document.createElement('div')
+        note.className = 'settings-conn-note'
+        note.textContent = role.detail
+        row.append(note)
+      }
+      rows.push(row)
+    }
+  }
+
+  const heading = document.createElement('div')
+  heading.className = 'settings-conn-meta'
+  heading.textContent = '站点可用性'
+  rows.push(heading)
+
+  for (const site of report.sites ?? []) {
+    const row = document.createElement('div')
+    row.className = 'settings-conn-row'
+    row.dataset.state = site.embeddable ? 'ready' : 'pending'
+    const title = document.createElement('div')
+    title.className = 'settings-conn-title'
+    const name = document.createElement('span')
+    name.textContent = site.label
+    const badge = document.createElement('span')
+    badge.textContent = site.embeddable ? '可嵌入' : '建议独立标签页'
+    title.append(name, badge)
+    const note = document.createElement('div')
+    note.className = 'settings-conn-note'
+    note.textContent = site.note
+    row.append(title, note)
+    rows.push(row)
+  }
+
+  connectionCheckResultsEl.replaceChildren(...rows)
+}
+
+function connectionNote(text: string): HTMLElement {
+  const note = document.createElement('div')
+  note.className = 'settings-conn-note'
+  note.textContent = text
+  return note
+}
+
 function registerAgentControlSettings(): void {
+  connectionCheckEl.addEventListener('click', () => {
+    void runConnectionCheck()
+  })
   agentControlToggleEl.addEventListener('click', () => {
     runCommand('GROUP_SETTINGS_UPDATE', {
       agentControlEnabled: !store.settings.agentControlEnabled,

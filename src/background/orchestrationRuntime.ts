@@ -789,7 +789,7 @@ function findLocalRoleFrameBlocker(
     if (isExternalModelRole(role)) continue
     const binding = deps.runtimeFrames.getByRole(chat.id, role.id)
     if (!binding?.ready) {
-      return { roleId: role.id, roleName: role.name, reason: '人员 iframe 尚未就绪，请先恢复人员' }
+      return { roleId: role.id, roleName: role.name, reason: '人员页面尚未就绪，请先恢复人员' }
     }
   }
   return undefined

@@ -33,15 +33,19 @@ Join the OpenTeam WeChat community by scanning the QR code below. If the QR code
 - 🔄 **Independent and collaborative modes**: compare isolated perspectives first, then let members reference, challenge, and build on each other.
 - 💾 **Local-first storage**: chats, people, messages, notes, highlights, and settings are stored in browser storage.
 - 🤖 **Agent control CLI**: optional `openteamcli` support lets local agents create chats, add roles, post tasks, and wait for replies.
+- 🪟 **Two hosting modes per member**: keep a member embedded in the team workspace, or run its AI page in its own browser tab when the site blocks embedded frames.
+- 🔌 **Connection check**: the settings menu reports every member's link state and which sites are usable inside the embedded workspace.
 
 ## 🧭 How It Works
 
-Each OpenTeam member is bound to an AI website session. When you send a message, OpenTeam builds a prompt from the chat mode, member persona, referenced messages, and shared context. The extension then delivers that prompt into the member's iframe-backed AI page and listens for the reply.
+Each OpenTeam member is bound to an AI website session. When you send a message, OpenTeam builds a prompt from the chat mode, member persona, referenced messages, and shared context. The extension then delivers that prompt into the member's AI page and listens for the reply.
+
+By default that AI page is embedded in the team workspace as an iframe. A member can also be switched to **independent tab hosting** from its member card; the page then runs in its own browser tab and the same prompt/reply pipeline talks to that tab. Use tab hosting for sites that break inside embedded frames (Grok currently blocks its reply WebSocket there).
 
 ```text
 team.html
   -> background service worker
-  -> AI site iframe
+  -> AI site iframe (embedded) or AI site tab (independent tab hosting)
   -> content script
   -> AI webpage reply
   -> OpenTeam message stream
@@ -141,6 +145,7 @@ OpenTeam does not provide cloud sync. Your AI conversations are still processed 
 - OpenTeam is Chrome / Chromium-first.
 - AI-site adapters depend on page DOM structure, so website redesigns can break prompt sending or reply capture.
 - The iframe workspace requires response-header changes through `declarativeNetRequest`, which makes the permission surface heavier than a normal popup extension.
+- Some sites work poorly inside an embedded frame (Grok blocks its reply WebSocket). Switch that member to independent tab hosting, or use a different site.
 - Built-in famous-person advisor templates are prompt templates inspired by public ideas. They are not real people and should not be presented as real participation.
 - Medical, legal, financial, and other high-stakes outputs still require human judgment and qualified professional advice.
 

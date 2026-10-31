@@ -235,6 +235,103 @@ describe('team page role panel view boundary', () => {
   })
 })
 
+  it('toggles the member hosting mode between the embedded frame and a browser tab', async () => {
+    const store = makeStoreWithRole()
+    store.rolesById['role-1'].status = 'ready'
+    const rolePanelEl = document.createElement('aside')
+    const roleSummaryEl = document.createElement('p')
+    const roleListEl = document.createElement('div')
+    rolePanelEl.append(roleSummaryEl, roleListEl)
+    const runCommand = vi.fn(async () => undefined)
+    const focusRoleFrame = vi.fn()
+
+    const view = createRolePanelView({
+      state: createTeamPageState(),
+      getStore: () => store,
+      rolePanelEl,
+      roleSummaryEl,
+      roleListEl,
+      iframeHost: { recoverRole: vi.fn() },
+      getCurrentChat: () => store.chatsById['chat-1'],
+      getCurrentRoles: () => [store.rolesById['role-1']],
+      emptyCard: (title, body) => {
+        const card = document.createElement('div')
+        card.textContent = `${title}${body}`
+        return card
+      },
+      roleToneClass: () => 'role-tone-0',
+      roleAvatarLabel: name => name?.slice(0, 1) ?? '',
+      insertMention: vi.fn(),
+      refreshCurrentChat: vi.fn(async () => undefined),
+      focusRoleFrame,
+      runCommand,
+      showError: vi.fn(),
+    })
+
+    view.renderRolePanel()
+    const embedded = roleListEl.querySelector<HTMLButtonElement>('[data-role-host-mode="role-1"]')
+    expect(embedded?.textContent).toBe('嵌入窗口')
+    embedded?.click()
+    await Promise.resolve()
+    expect(runCommand).toHaveBeenCalledWith('GROUP_ROLE_HOST_MODE_SET', { chatId: 'chat-1', roleId: 'role-1', hostMode: 'tab' })
+
+    store.rolesById['role-1'].hostMode = 'tab'
+    view.renderRolePanel()
+    const hosted = roleListEl.querySelector<HTMLButtonElement>('[data-role-host-mode="role-1"]')
+    expect(hosted?.textContent).toBe('独立标签页')
+    hosted?.click()
+    await Promise.resolve()
+    expect(runCommand).toHaveBeenCalledWith('GROUP_ROLE_HOST_MODE_SET', { chatId: 'chat-1', roleId: 'role-1', hostMode: 'iframe' })
+  })
+
+  it('re-attaches a tab-hosted member instead of rebuilding a frame', async () => {
+    const store = makeStoreWithRole()
+    store.rolesById['role-1'].status = 'ready'
+    store.rolesById['role-1'].hostMode = 'tab'
+    store.rolesById['role-1'].hostedTabId = 4242
+    const rolePanelEl = document.createElement('aside')
+    const roleSummaryEl = document.createElement('p')
+    const roleListEl = document.createElement('div')
+    rolePanelEl.append(roleSummaryEl, roleListEl)
+    const iframeHost = { recoverRole: vi.fn() }
+    const runCommand = vi.fn(async () => undefined)
+    const focusRoleFrame = vi.fn()
+
+    const view = createRolePanelView({
+      state: createTeamPageState(),
+      getStore: () => store,
+      rolePanelEl,
+      roleSummaryEl,
+      roleListEl,
+      iframeHost,
+      getCurrentChat: () => store.chatsById['chat-1'],
+      getCurrentRoles: () => [store.rolesById['role-1']],
+      emptyCard: (title, body) => {
+        const card = document.createElement('div')
+        card.textContent = `${title}${body}`
+        return card
+      },
+      roleToneClass: () => 'role-tone-0',
+      roleAvatarLabel: name => name?.slice(0, 1) ?? '',
+      insertMention: vi.fn(),
+      refreshCurrentChat: vi.fn(async () => undefined),
+      focusRoleFrame,
+      runCommand,
+      showError: vi.fn(),
+    })
+
+    view.renderRolePanel()
+    roleListEl.querySelector<HTMLButtonElement>('[data-role-refresh="role-1"]')?.click()
+    await Promise.resolve()
+    expect(iframeHost.recoverRole).not.toHaveBeenCalled()
+    expect(runCommand).toHaveBeenCalledWith('GROUP_ROLE_HOST_TAB_FOCUS', { chatId: 'chat-1', roleId: 'role-1' })
+
+    roleListEl.querySelector<HTMLButtonElement>('.role-jump')?.click()
+    await Promise.resolve()
+    expect(focusRoleFrame).not.toHaveBeenCalled()
+    expect(runCommand).toHaveBeenCalledWith('GROUP_ROLE_HOST_TAB_FOCUS', { chatId: 'chat-1', roleId: 'role-1' })
+  })
+
 function makeStoreWithRole(): OpenTeamStore {
   const store = createDefaultStore()
   store.settings.language = 'zh-CN'

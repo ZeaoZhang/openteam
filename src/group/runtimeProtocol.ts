@@ -40,9 +40,28 @@ export type ResyncReplyMessage = {
   currentContent?: string
 }
 
-export type BackgroundToRoleMessage = SendPromptMessage | StopGenerationMessage | ResyncReplyMessage
+export type AttachRoleMessage = {
+  type: 'TEAM_ATTACH_ROLE'
+  chatId: string
+  roleId: string
+  hostTabId?: number
+}
+
+export type BackgroundToRoleMessage = SendPromptMessage | StopGenerationMessage | ResyncReplyMessage | AttachRoleMessage
+
+export type HostedRoleLookupMessage = {
+  type: 'TEAM_HOSTED_ROLE_LOOKUP'
+  url?: string
+}
+
+export type HostedRoleLookupResponse = {
+  ok: boolean
+  assignment?: { chatId: string; roleId: string; hostTabId?: number }
+  error?: string
+}
 
 export type RoleToBackgroundMessage =
+  | HostedRoleLookupMessage
   | { type: 'TEAM_FRAME_ROLE_READY'; chatId?: string; roleId: string; hostTabId?: number; conversationId: string; conversationUrl?: string }
   | { type: 'TEAM_ROLE_CONVERSATION_UPDATED'; chatId: string; roleId: string; conversationId?: string; conversationUrl?: string }
   | { type: 'TEAM_SEND_ACK'; chatId: string; roleId: string; messageId: string }

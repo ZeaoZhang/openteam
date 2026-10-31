@@ -118,10 +118,16 @@ export function createRoleRecoveryController(deps: RoleRecoveryDependencies): Ro
     for (const role of uniqueRoles) deps.state.reconnectingRoleKeys.add(teamRoleKey(chat.id, role.id))
     deps.renderComposerState()
 
+    const iframeRoles = uniqueRoles.filter(role => role.hostMode !== 'tab')
+    const tabRoles = uniqueRoles.filter(role => role.hostMode === 'tab')
+
     try {
       deps.log.info('roles:auto-reconnect:start', { chatId: chat.id, roleIds: uniqueRoles.map(role => role.id) })
-      await Promise.all(uniqueRoles.map(role => deps.runCommand('GROUP_ROLE_RECOVER', { chatId: chat.id, roleId: role.id })))
-      for (const role of uniqueRoles) deps.iframeHost.recoverRole(role)
+      await Promise.all([
+        ...iframeRoles.map(role => deps.runCommand('GROUP_ROLE_RECOVER', { chatId: chat.id, roleId: role.id })),
+        ...tabRoles.map(role => deps.runCommand('GROUP_ROLE_HOST_TAB_FOCUS', { chatId: chat.id, roleId: role.id })),
+      ])
+      for (const role of iframeRoles) deps.iframeHost.recoverRole(role)
       await waitForRolesReady(chat.id, uniqueRoles.map(role => role.id))
       deps.log.info('roles:auto-reconnect:ready', { chatId: chat.id, roleIds: uniqueRoles.map(role => role.id) })
     } finally {
@@ -132,14 +138,23 @@ export function createRoleRecoveryController(deps: RoleRecoveryDependencies): Ro
 
   function focusRoleFrame(chatId: string, roleId: string | undefined): void {
     if (!roleId) return
-    deps.setWindowMinimized(true)
     const store = deps.getStore()
-    const chat = store.chatsById[chatId]
-    if (chat && deps.state.selectedChatId !== chatId) deps.switchChat(chatId)
-    if (deps.iframeHost.focusRoleFrame(chatId, roleId)) return
     const role = store.rolesById[roleId]
     if (!role) return
     if (role.modelSource === 'external') return
+    if (role.hostMode === 'tab') {
+      deps.setWindowMinimized(true)
+      const chat = store.chatsById[chatId]
+      if (chat && deps.state.selectedChatId !== chatId) deps.switchChat(chatId)
+      deps.runCommand('GROUP_ROLE_HOST_TAB_FOCUS', { chatId, roleId })
+        .catch(error => deps.showError(error instanceof Error ? error.message : String(error)))
+      return
+    }
+
+    deps.setWindowMinimized(true)
+    const chat = store.chatsById[chatId]
+    if (chat && deps.state.selectedChatId !== chatId) deps.switchChat(chatId)
+    if (deps.iframeHost.focusRoleFrame(chatId, roleId)) return
     deps.iframeHost.recoverRole(role)
   }
 
@@ -232,5 +247,5 @@ function teamRoleKey(chatId: string, roleId: string): string {
 
 function isIframeNotReadyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  return message.includes('人员 iframe 尚未就绪')
+  return message.includes('人员页面尚未就绪') || message.includes('人员 iframe 尚未就绪')
 }

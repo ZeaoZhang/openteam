@@ -229,7 +229,7 @@ export function createRoleHandlers(deps: RoleHandlersDependencies): BackgroundMe
     const roleId = requireString(message.roleId, '缺少人员 ID')
     const binding = deps.runtimeFrames.getByRole(chatId, roleId)
     deps.log.info('role-reinitialize:start', { chatId, roleId, binding })
-    if (!binding?.ready) throw new Error('人员 iframe 尚未就绪，请先恢复人员')
+    if (!binding?.ready) throw new Error('人员页面尚未就绪，请先恢复人员')
 
     const timestamp = deps.now()
     const { store, result } = await mutateStore(store => {
