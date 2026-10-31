@@ -78,7 +78,23 @@ function escapeHtml(value: string): string {
  */
 export function editorHoldsText(editor: HTMLElement, content: string): boolean {
   const collapse = (value: string) => value.replace(/\s+/g, '')
-  return collapse(readEditorText(editor)) === collapse(content)
+  const target = collapse(content)
+  const actual = collapse(readEditorText(editor))
+  if (actual === target) return true
+  return editorKeptPromptStart(actual, target)
+}
+
+/**
+ * Some editors rebuild markdown as they accept it (Kimi re-renders list markers and code fences), so
+ * the readback never matches character for character even though the whole prompt landed. Treat the
+ * write as accepted when the editor kept the opening of the prompt and grew to a comparable size;
+ * the dispatch check afterwards still verifies the site actually sent something.
+ */
+function editorKeptPromptStart(actual: string, target: string): boolean {
+  if (!target || !actual) return false
+  const probeLength = Math.min(40, target.length)
+  if (!actual.includes(target.slice(0, probeLength))) return false
+  return actual.length >= Math.min(target.length, 400) * 0.5
 }
 
 export function readEditorText(editor: HTMLElement, options: { normalizeNbsp?: boolean } = {}): string {

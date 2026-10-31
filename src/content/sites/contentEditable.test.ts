@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { dispatchEnterKey, getLastEditorWriteStrategy, readEditorText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
+import { dispatchEnterKey, editorHoldsText, getLastEditorWriteStrategy, readEditorText, setContentEditableText, submitEditorWithKeyboard, waitForPromptDispatch } from './contentEditable'
 
 function createEditor(): HTMLElement {
   document.body.innerHTML = '<div contenteditable="true" role="textbox"><p><br></p></div>'
@@ -34,6 +34,16 @@ describe('contentEditable prompt writing', () => {
 
     expect(editor.textContent).toBe('你好 ProseMirror')
     expect(execCommand).toHaveBeenCalledWith('insertText', false, '你好 ProseMirror')
+  })
+
+  it('accepts a write the site re-rendered as long as the prompt opening survived', () => {
+    const editor = createEditor()
+    const prompt = '请以「资料研究员」身份回复。你可以参考、补充或反驳其他成员观点。' + '正文'.repeat(200)
+    // Kimi rebuilds markdown while accepting the text, so the readback never matches byte for byte.
+    editor.textContent = prompt.replace(/身份/g, '身份') + '\n\n- 列表项被站点重排'
+
+    expect(editorHoldsText(editor, prompt)).toBe(true)
+    expect(editorHoldsText(editor, '完全不同的另一段提示词')).toBe(false)
   })
 
   it('falls back to a DOM write when the editing pipeline is unavailable', () => {
