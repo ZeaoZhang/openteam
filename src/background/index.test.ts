@@ -28,6 +28,7 @@ async function setupBackgroundWithRouteHandler(handler: (message: RuntimeMessage
       onInstalled: { addListener: vi.fn() },
       onStartup: { addListener: vi.fn() },
       onMessage: { addListener: vi.fn(listener => runtimeListeners.push(listener)) },
+      onMessageExternal: { addListener: vi.fn() },
       sendMessage: vi.fn().mockResolvedValue({ ok: true }),
       getURL: vi.fn((path: string) => `chrome-extension://test/${path}`),
     },

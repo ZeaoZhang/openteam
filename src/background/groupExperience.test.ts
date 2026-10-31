@@ -30,6 +30,7 @@ async function setupBackground(initialStore?: OpenTeamStore): Promise<Background
     runtime: {
       onInstalled: { addListener: vi.fn() },
       onMessage: { addListener: vi.fn(listener => listeners.push(listener)) },
+      onMessageExternal: { addListener: vi.fn() },
       sendMessage: runtimeSendMessage,
       getURL: vi.fn((path: string) => `chrome-extension://test/${path}`),
     },
