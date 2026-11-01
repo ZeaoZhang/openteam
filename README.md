@@ -2,9 +2,9 @@
 
 **🌐 Language:** English | [简体中文](README.zh-CN.md)
 
-> A local-first AI team workspace that turns your existing ChatGPT, Claude, Gemini, DeepSeek, and Grok web sessions into a multi-agent discussion room.
+> A local-first AI team workspace that turns your existing ChatGPT, Claude, Gemini, DeepSeek, Grok, Kimi, Zhipu GLM, and Qwen web sessions into a multi-agent discussion room.
 
-OpenTeam is a Manifest V3 Chrome extension. It does not require model API keys and does not spend extra OpenAI, Claude, Gemini, DeepSeek, or Grok API tokens. Instead, it reuses the AI accounts you already have open in your browser, sends tasks to those web sessions, and gathers replies from different people and models into one shared team chat.
+OpenTeam is a Manifest V3 Chrome extension. It does not require model API keys and does not spend extra ChatGPT, Claude, Gemini, DeepSeek, Grok, Kimi, GLM, or Qwen API tokens. Instead, it reuses the AI accounts you already have open in your browser, sends tasks to those web sessions, and gathers replies from different people and models into one shared team chat.
 
 Use it for learning, research, and personal non-commercial experiments where one answer is not enough: product reviews, technical design reviews, content planning, personal decisions, multi-model comparison, and multi-step work that benefits from several AI roles thinking together.
 
@@ -27,7 +27,7 @@ Join the OpenTeam WeChat community by scanning the QR code below. If the QR code
 ## ✨ Highlights
 
 - 🚫 **0 API token workflow**: reuse AI website sessions instead of calling model APIs directly.
-- 🧩 **Multi-model discussion**: coordinate Gemini, ChatGPT, Claude, DeepSeek, Grok, and other supported web sessions in one chat.
+- 🧩 **Multi-model discussion**: coordinate Gemini, ChatGPT, Claude, DeepSeek, Grok, Kimi, Zhipu GLM, and Qwen web sessions in one chat.
 - 🧑‍🏫 **Built-in advisor library**: start with 38 expert and thinking-style advisor templates, or create your own people.
 - 📣 **Mention-based routing**: use `@person` to ask one member, or `@everyone` to dispatch the same task to the whole team.
 - 🔄 **Independent and collaborative modes**: compare isolated perspectives first, then let members reference, challenge, and build on each other.
@@ -40,7 +40,7 @@ Join the OpenTeam WeChat community by scanning the QR code below. If the QR code
 
 Each OpenTeam member is bound to an AI website session. When you send a message, OpenTeam builds a prompt from the chat mode, member persona, referenced messages, and shared context. The extension then delivers that prompt into the member's AI page and listens for the reply.
 
-By default that AI page is embedded in the team workspace as an iframe. A member can also be switched to **independent tab hosting** from its member card; the page then runs in its own browser tab and the same prompt/reply pipeline talks to that tab. Use tab hosting for sites that break inside embedded frames (Grok currently blocks its reply WebSocket there).
+By default that AI page is embedded in the team workspace as an iframe. A member can also be switched to **independent tab hosting** from its member card; the page then runs in its own browser tab and the same prompt/reply pipeline talks to that tab. Use tab hosting for sites that break inside embedded frames: Grok blocks its reply WebSocket there, Kimi ignores scripted sends, and Zhipu GLM keeps re-asking for its slider check. Those three sites default to tab hosting.
 
 ```text
 team.html
@@ -60,6 +60,9 @@ Supported site types:
 | Claude | Long documents, review, structured writing, careful reasoning |
 | DeepSeek | Code, reasoning, Chinese-language work, cost-sensitive tasks |
 | Grok | Current-events research, alternative phrasing, X/Grok web-session workflows |
+| Kimi | Long Chinese documents, writing, agent-shaped tasks |
+| Zhipu GLM | Chinese-language Q&A, writing, general assistance |
+| Qwen | Chinese/English general work, code, translation |
 
 These are practical defaults, not rankings. Actual quality depends on model versions, account plans, task type, and input material.
 
@@ -145,7 +148,9 @@ OpenTeam does not provide cloud sync. Your AI conversations are still processed 
 - OpenTeam is Chrome / Chromium-first.
 - AI-site adapters depend on page DOM structure, so website redesigns can break prompt sending or reply capture.
 - The iframe workspace requires response-header changes through `declarativeNetRequest`, which makes the permission surface heavier than a normal popup extension.
-- Some sites work poorly inside an embedded frame (Grok blocks its reply WebSocket). Switch that member to independent tab hosting, or use a different site.
+- Some sites work poorly inside an embedded frame, and default to tab hosting: Grok (its reply WebSocket is blocked in frames), Kimi (ignores scripted sends in frames and persists unsent drafts to the account), and Zhipu GLM (keeps asking for a slider human check in new pages).
+- Zhipu GLM can only send after a human drags its slider once in the hosting tab; OpenTeam detects that state and asks you to verify instead of hanging.
+- Kimi and some other sites rate-limit free accounts; OpenTeam surfaces the site's throttling message instead of waiting for a reply that will never arrive.
 - Built-in famous-person advisor templates are prompt templates inspired by public ideas. They are not real people and should not be presented as real participation.
 - Medical, legal, financial, and other high-stakes outputs still require human judgment and qualified professional advice.
 

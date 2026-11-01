@@ -2,9 +2,9 @@
 
 **🌐 语言:** [English](README.md) | 简体中文
 
-> 复用你已经登录的 AI 网页账号，把 ChatGPT、Claude、Gemini、DeepSeek、Grok 组织成一个本地优先的 AI 专家团。
+> 复用你已经登录的 AI 网页账号，把 ChatGPT、Claude、Gemini、DeepSeek、Grok、Kimi、智谱清言、Qwen 组织成一个本地优先的 AI 专家团。
 
-OpenTeam 是一个 Manifest V3 Chrome 扩展。它不要求你配置模型 API Key，也不额外消耗 OpenAI、Claude、Gemini、DeepSeek 或 Grok 的 API token；它会复用你已经在浏览器里打开的 AI 网页会话，把任务发送给不同人员和不同模型，再把回复汇总到同一个群聊工作台。
+OpenTeam 是一个 Manifest V3 Chrome 扩展。它不要求你配置模型 API Key，也不额外消耗 ChatGPT、Claude、Gemini、DeepSeek、Grok、Kimi、智谱清言或 Qwen 的 API token；它会复用你已经在浏览器里打开的 AI 网页会话，把任务发送给不同人员和不同模型，再把回复汇总到同一个群聊工作台。
 
 它适合用于学习、研究和个人非商用实验，处理需要多视角判断的问题：产品评审、技术方案审查、内容创作、个人决策、多模型对比，以及需要多个 AI 角色协作完成的连续任务。
 
@@ -27,7 +27,7 @@ OpenTeam 可以看作 [OpenLink](https://github.com/afumu/openlink) 的姊妹篇
 ## ✨ 核心亮点
 
 - 🚫 **0 API token 工作流**：复用 AI 网站网页会话，而不是直接调用模型 API。
-- 🧩 **多模型讨论**：在同一个群聊里调度 Gemini、ChatGPT、Claude、DeepSeek、Grok 等网页端模型。
+- 🧩 **多模型讨论**：在同一个群聊里调度 Gemini、ChatGPT、Claude、DeepSeek、Grok、Kimi、智谱清言、Qwen 网页端模型。
 - 🧑‍🏫 **内置顾问库**：内置 38 个专家 / 思想风格顾问模板，也支持自定义人员。
 - 📣 **基于 @ 的消息路由**：用 `@人员` 定向提问，或用 `@所有人` 同时分发给整个团队。
 - 🔄 **独立与协作两种模式**：先收集彼此独立的视角，再让成员参考、补充或反驳其他观点。
@@ -36,12 +36,14 @@ OpenTeam 可以看作 [OpenLink](https://github.com/afumu/openlink) 的姊妹篇
 
 ## 🧭 工作原理
 
-OpenTeam 会把每个群聊成员绑定到一个 AI 网页会话。用户发送消息后，扩展会根据群聊模式、人员人设、引用消息和共享上下文构建 prompt，然后投递到该成员对应的 iframe AI 页面里，并监听网页回复。
+OpenTeam 会把每个群聊成员绑定到一个 AI 网页会话。用户发送消息后，扩展会根据群聊模式、人员人设、引用消息和共享上下文构建 prompt，然后投递到该成员的 AI 页面里，并监听网页回复。
+
+AI 页面默认以 iframe 形式嵌在团队页里；也可以在成员卡片上切换为**独立标签页承载**，让页面在自己的浏览器 tab 里运行，prompt / 回复链路完全一致。对在嵌入窗口里跑不通的站点请用标签页承载：Grok 的回复 WebSocket 会被拦、Kimi 会忽略脚本触发的发送、智谱清言会反复要求滑块验证。这三个站点默认就是标签页承载。
 
 ```text
 team.html
   -> background service worker
-  -> AI site iframe
+  -> AI site iframe (嵌入) 或 AI site tab (独立标签页)
   -> content script
   -> AI webpage reply
   -> OpenTeam message stream
@@ -56,6 +58,9 @@ team.html
 | Claude | 长文档、审查、结构化写作、谨慎推理 |
 | DeepSeek | 代码、推理、中文任务和成本敏感场景 |
 | Grok | 时事研究、替代表述、X/Grok 网页会员会话工作流 |
+| Kimi | 长中文文档、写作、智能体类任务 |
+| 智谱清言 | 中文问答、写作、通用辅助 |
+| Qwen | 中英文通用任务、代码、翻译 |
 
 这些只是常见使用方向，不代表固定排名。实际效果取决于模型版本、账号权益、任务类型和输入材料。
 
@@ -141,6 +146,9 @@ OpenTeam 不提供云端同步。你的 AI 对话仍然会由你使用的 AI 网
 - OpenTeam 当前优先支持 Chrome / Chromium 系浏览器。
 - AI 站点适配依赖网页 DOM，目标网站改版可能导致 prompt 发送或回复监听失效。
 - iframe 工作区依赖 `declarativeNetRequest` 调整响应头，因此权限面比普通 popup 扩展更重。
+- 部分站点在嵌入窗口里不可用，默认走独立标签页承载：Grok（回复 WebSocket 被拦）、Kimi（嵌入窗口里忽略脚本发送，且未发送草稿会持久化到账号）、智谱清言（新页面反复要求滑块验证）。
+- 智谱清言需要真人在承载页面里拖动一次滑块，之后可长期复用同一标签页；OpenTeam 会识别这个状态并提示，而不是一直挂起。
+- Kimi 等站点会对免费账号限流，OpenTeam 会把站点的限流提示直接显示出来，而不是等一个不会到来的回复。
 - 内置名人风格顾问是基于公开思想整理的提示词模板，不是真人参与，也不应被表述为真人参与。
 - 医疗、法律、金融等高风险输出仍需要用户自行判断，并咨询合格专业人士。
 
