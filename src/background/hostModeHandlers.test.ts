@@ -165,6 +165,7 @@ describe('background host mode handlers', () => {
     expect(response.data?.sites.map(site => site.site)).toEqual(['gemini', 'chatgpt', 'claude', 'deepseek', 'grok', 'kimi', 'glm', 'qwen'])
     expect(response.data?.sites.find(site => site.site === 'grok')).toMatchObject({ embeddable: false })
     expect(response.data?.sites.find(site => site.site === 'kimi')).toMatchObject({ embeddable: false })
+    expect(response.data?.sites.find(site => site.site === 'glm')).toMatchObject({ embeddable: false })
   })
 })
 

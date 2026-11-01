@@ -65,7 +65,7 @@ const SITE_NOTES: Record<ChatSite, string> = {
   grok: 'Grok 的回复依赖 WebSocket，在嵌入窗口里常被浏览器拦截；建议用独立标签页承载。',
   kimi: 'Kimi 在嵌入窗口里会忽略脚本触发的发送操作，只能用独立标签页承载。',
   qwen: '嵌入窗口与独立标签页都可用。',
-  glm: '嵌入窗口可用；站点偶发滑块人机验证，需要先在页面里验证一次。',
+  glm: '智谱清言在新建页面或嵌入窗口里会反复要求滑块人机验证，只能用独立标签页承载；在该页面里完成一次验证后可长期复用。',
 }
 
 export const SITE_CAPABILITIES: SiteCapability[] = CHAT_SITE_LIST.map(site => ({

@@ -38,7 +38,7 @@ export function chatSiteLabel(site: ChatSite | undefined): string {
  * depend on transports the browser blocks for third-party frames. Members on these sites default to
  * tab hosting, which is the only mode that actually delivers replies.
  */
-const TAB_ONLY_SITES: readonly ChatSite[] = ['grok', 'kimi']
+const TAB_ONLY_SITES: readonly ChatSite[] = ['grok', 'kimi', 'glm']
 
 export function isEmbeddableChatSite(site: ChatSite | undefined): boolean {
   return !site || !TAB_ONLY_SITES.includes(site)
