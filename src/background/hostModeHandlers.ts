@@ -1,3 +1,4 @@
+import { CHAT_SITE_LIST, chatSiteLabel, defaultHostModeForSite, isEmbeddableChatSite } from '../group/chatSites'
 import { getDefaultChatSiteUrlForRole } from '../group/conversationUrl'
 import { loadStore } from '../group/store'
 import type { ChatSite, GroupChat, GroupRole, OpenTeamStore } from '../group/types'
@@ -56,31 +57,23 @@ export interface ConnectionReport {
   sites: SiteCapability[]
 }
 
-export const SITE_CAPABILITIES: SiteCapability[] = [
-  { site: 'gemini', label: 'Gemini', embeddable: true, note: '嵌入窗口与独立标签页都可用。' },
-  { site: 'chatgpt', label: 'ChatGPT', embeddable: true, note: '嵌入窗口与独立标签页都可用。' },
-  { site: 'claude', label: 'Claude', embeddable: true, note: '嵌入窗口可用；首次进入可能需要完成人机验证。' },
-  { site: 'deepseek', label: 'DeepSeek', embeddable: true, note: '嵌入窗口与独立标签页都可用。' },
-  {
-    site: 'grok',
-    label: 'Grok',
-    embeddable: false,
-    note: 'Grok 的回复依赖 WebSocket，在嵌入窗口里常被浏览器拦截；建议用独立标签页承载。',
-  },
-  {
-    site: 'kimi',
-    label: 'Kimi',
-    embeddable: false,
-    note: 'Kimi 在嵌入窗口里会忽略脚本触发的发送操作，请用独立标签页承载。',
-  },
-  { site: 'qwen', label: 'Qwen', embeddable: true, note: '嵌入窗口与独立标签页都可用。' },
-  {
-    site: 'glm',
-    label: '智谱清言',
-    embeddable: true,
-    note: '嵌入窗口可用；站点偶发滑块人机验证，需要先在页面里验证一次。',
-  },
-]
+const SITE_NOTES: Record<ChatSite, string> = {
+  gemini: '嵌入窗口与独立标签页都可用。',
+  chatgpt: '嵌入窗口与独立标签页都可用。',
+  claude: '嵌入窗口可用；首次进入可能需要完成人机验证。',
+  deepseek: '嵌入窗口与独立标签页都可用。',
+  grok: 'Grok 的回复依赖 WebSocket，在嵌入窗口里常被浏览器拦截；建议用独立标签页承载。',
+  kimi: 'Kimi 在嵌入窗口里会忽略脚本触发的发送操作，只能用独立标签页承载。',
+  qwen: '嵌入窗口与独立标签页都可用。',
+  glm: '嵌入窗口可用；站点偶发滑块人机验证，需要先在页面里验证一次。',
+}
+
+export const SITE_CAPABILITIES: SiteCapability[] = CHAT_SITE_LIST.map(site => ({
+  site,
+  label: chatSiteLabel(site),
+  embeddable: isEmbeddableChatSite(site),
+  note: SITE_NOTES[site],
+}))
 
 export function siteLabelFor(site: ChatSite | undefined): string {
   return SITE_CAPABILITIES.find(capability => capability.site === site)?.label ?? '未知站点'
@@ -176,7 +169,7 @@ export function createHostModeHandlers(deps: HostModeHandlersDependencies): Back
         .filter(role => role.modelSource !== 'external')
         .map(async (role): Promise<RoleConnectionReport> => {
           const binding = deps.runtimeFrames.getByRole(chat.id, role.id)
-          const hostMode = role.hostMode ?? 'iframe'
+          const hostMode = role.hostMode ?? defaultHostModeForSite(role.chatSite)
           const tabId = role.hostedTabId
           const tabAlive = hostMode === 'tab' && tabId !== undefined ? await deps.roleTabHost.isAlive(tabId) : hostMode === 'iframe'
           return {
@@ -216,7 +209,7 @@ export function createHostModeHandlers(deps: HostModeHandlersDependencies): Back
     const missing: string[] = []
     for (const role of getChatRoles(store, chat)) {
       if (role.modelSource === 'external') continue
-      if ((role.hostMode ?? 'iframe') !== 'tab') continue
+      if ((role.hostMode ?? defaultHostModeForSite(role.chatSite)) !== 'tab') continue
       if (deps.runtimeFrames.getByRole(chat.id, role.id)?.ready) continue
       const tabId = role.hostedTabId
       if (tabId === undefined || !(await deps.roleTabHost.isAlive(tabId))) {

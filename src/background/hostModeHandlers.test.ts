@@ -162,7 +162,7 @@ describe('background host mode handlers', () => {
     expect(response.ok).toBe(true)
     expect(response.data?.roles).toHaveLength(1)
     expect(response.data?.roles[0]).toMatchObject({ roleId: 'role-1', hostMode: 'tab', ready: true, tabAlive: true, siteLabel: 'Grok' })
-    expect(response.data?.sites.map(site => site.site)).toEqual(['gemini', 'chatgpt', 'claude', 'deepseek', 'grok', 'kimi', 'qwen', 'glm'])
+    expect(response.data?.sites.map(site => site.site)).toEqual(['gemini', 'chatgpt', 'claude', 'deepseek', 'grok', 'kimi', 'glm', 'qwen'])
     expect(response.data?.sites.find(site => site.site === 'grok')).toMatchObject({ embeddable: false })
     expect(response.data?.sites.find(site => site.site === 'kimi')).toMatchObject({ embeddable: false })
   })

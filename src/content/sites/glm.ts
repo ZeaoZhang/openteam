@@ -14,10 +14,12 @@ const GLM_SELECTORS = {
   editor:
     'textarea.scroll-display-none, .input-box-inner textarea, textarea[placeholder*="和我聊"], [contenteditable="true"][role="textbox"], .input-box [contenteditable="true"]',
   composer: '.input-wrap, .input-outer, .input-box, form',
+  // chatglm.cn renders reasoning and the real answer in sibling wrappers; the reasoning one carries
+  // `text-advance-thinking-content`, so only the plain wraps hold the reply the member actually sent.
   response:
-    '.answer-item .markdown-body, .chat-item-answer .markdown-body, .answer-content .markdown-body, [class*="answer"] .markdown-body',
-  responseContainer: '.answer-item, .chat-item-answer, [class*="answer-item"], [class*="answer-content"]',
-  userMessage: '.question-item, .chat-item-question, [class*="question-item"], [class*="question-content"]',
+    '.answer-content-wrap:not(.text-advance-thinking-content) .markdown-body, .answer-item .markdown-body, .chat-item-answer .markdown-body',
+  responseContainer: '.answer-content-wrap, .answer, .answer-item, .chat-item-answer',
+  userMessage: '.conversation.question, .question-item, .chat-item-question, .question-text-style',
   sendButton:
     '.enter.is-main-chat, .enter-button, [class*="send-btn"], button[aria-label*="发送"], button[aria-label*="Send"], [class*="send-button"]',
   stopButton: 'button[aria-label*="停止"], [class*="stop-button"], [class*="stop-generat"]',
@@ -119,7 +121,8 @@ function parseSafeGlmUrl(value: string | undefined): URL | undefined {
 }
 
 function extractConversationId(url: URL): string | undefined {
-  const fromQuery = url.searchParams.get('chatId') ?? url.searchParams.get('sessionId') ?? undefined
+  const fromQuery =
+    url.searchParams.get('cid') ?? url.searchParams.get('chatId') ?? url.searchParams.get('sessionId') ?? undefined
   if (fromQuery) return fromQuery
 
   const match = url.pathname.match(/^\/main\/(?:gdetail|chat)\/([^/]+)/)
@@ -215,6 +218,9 @@ function findResponseContainer(element: Element | null): Element | null {
 }
 
 function isGlmGenerating(): boolean {
+  // GLM swaps the send control into a `searching` state while it streams; the stop button only shows
+  // on some builds.
+  if (document.querySelector('.enter.is-main-chat.searching, .enter.searching')) return true
   return Boolean(findGlmStopButton())
 }
 

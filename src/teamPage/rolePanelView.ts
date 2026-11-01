@@ -1,4 +1,4 @@
-import { CHAT_SITE_LIST, chatSiteLabel, isChatSite } from '../group/chatSites'
+import { CHAT_SITE_LIST, chatSiteLabel, defaultHostModeForSite, isChatSite, isEmbeddableChatSite } from '../group/chatSites'
 import { roleMentionLabel, roleMentionLabelOptionsFromSettings } from '../group/mentionParser'
 import type { ChatSite, ExternalModelConfig, GroupRole, OpenTeamStore, RoleModelSource, RoleStatus } from '../group/types'
 import { normalizeLanguage, translateUi } from '../shared/i18n'
@@ -247,7 +247,7 @@ export function createRolePanelView(deps: RolePanelViewDependencies): RolePanelV
     wrap.className = 'role-meta-item role-host-mode'
     const pill = document.createElement('button')
     pill.type = 'button'
-    const tabMode = role.hostMode === 'tab'
+    const tabMode = hostModeFor(role) === 'tab'
     pill.className = `site-pill host-mode-pill ${tabMode ? 'host-mode-tab' : 'host-mode-iframe'}`
     pill.dataset.roleHostMode = role.id
     pill.textContent = tabMode ? ui('独立标签页') : ui('嵌入窗口')
@@ -264,6 +264,7 @@ export function createRolePanelView(deps: RolePanelViewDependencies): RolePanelV
       wrap.append(pill)
       return wrap
     }
+    if (tabMode && !isEmbeddableChatSite(role.chatSite)) pill.title = ui('该站点只能使用独立标签页承载')
     pill.addEventListener('click', event => {
       event.stopPropagation()
       const nextHostMode = tabMode ? 'iframe' : 'tab'
@@ -332,8 +333,22 @@ export function createRolePanelView(deps: RolePanelViewDependencies): RolePanelV
     const updatedRole = deps.getStore().rolesById[role.id]
     if (!updatedRole) return
     if (updatedRole.modelSource === 'external') return
+    if (!isEmbeddableChatSite(updatedRole.chatSite) && (updatedRole.hostMode ?? 'iframe') !== 'tab') {
+      // These sites cannot be driven from an embedded frame, so land the member in tab hosting
+      // instead of leaving a frame that silently never sends.
+      await deps.runCommand('GROUP_ROLE_HOST_MODE_SET', {
+        chatId: updatedRole.chatId,
+        roleId: updatedRole.id,
+        hostMode: 'tab',
+      })
+      return
+    }
     deps.iframeHost.recoverRole(updatedRole)
     await deps.runCommand('GROUP_ROLE_RECOVER', { chatId: updatedRole.chatId, roleId: updatedRole.id })
+  }
+
+  function hostModeFor(role: GroupRole) {
+    return role.hostMode ?? defaultHostModeForSite(role.chatSite)
   }
 
   return { renderRolePanel }

@@ -1,7 +1,12 @@
+import { defaultHostModeForSite } from '../group/chatSites'
 import type { GroupChat, GroupMessage, GroupRole, OpenTeamStore } from '../group/types'
 import type { RoleReadyWaiter, TeamPageState } from './appState'
 import { shouldAutoReconnectRole } from './chatExperience'
 import { runCommandWithReconnect } from './sendWithReconnect'
+
+function hostModeOf(role: GroupRole): 'iframe' | 'tab' {
+  return role.hostMode ?? defaultHostModeForSite(role.chatSite)
+}
 
 const AUTO_RECONNECT_TIMEOUT_MS = 90_000
 const ROLE_READY_POLL_MS = 1_000
@@ -118,8 +123,8 @@ export function createRoleRecoveryController(deps: RoleRecoveryDependencies): Ro
     for (const role of uniqueRoles) deps.state.reconnectingRoleKeys.add(teamRoleKey(chat.id, role.id))
     deps.renderComposerState()
 
-    const iframeRoles = uniqueRoles.filter(role => role.hostMode !== 'tab')
-    const tabRoles = uniqueRoles.filter(role => role.hostMode === 'tab')
+    const iframeRoles = uniqueRoles.filter(role => hostModeOf(role) !== 'tab')
+    const tabRoles = uniqueRoles.filter(role => hostModeOf(role) === 'tab')
 
     try {
       deps.log.info('roles:auto-reconnect:start', { chatId: chat.id, roleIds: uniqueRoles.map(role => role.id) })
@@ -142,7 +147,7 @@ export function createRoleRecoveryController(deps: RoleRecoveryDependencies): Ro
     const role = store.rolesById[roleId]
     if (!role) return
     if (role.modelSource === 'external') return
-    if (role.hostMode === 'tab') {
+    if (hostModeOf(role) === 'tab') {
       deps.setWindowMinimized(true)
       const chat = store.chatsById[chatId]
       if (chat && deps.state.selectedChatId !== chatId) deps.switchChat(chatId)

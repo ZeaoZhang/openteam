@@ -1,4 +1,4 @@
-import type { ChatSite } from './types'
+import type { ChatSite, RoleHostMode } from './types'
 
 /**
  * Every chat site OpenTeam can host a member in, in display order.
@@ -31,4 +31,19 @@ export function chatSiteLabel(site: ChatSite | undefined): string {
     default:
       return 'Gemini'
   }
+}
+
+/**
+ * Sites whose chat page cannot be driven from an embedded frame: they ignore scripted sends or
+ * depend on transports the browser blocks for third-party frames. Members on these sites default to
+ * tab hosting, which is the only mode that actually delivers replies.
+ */
+const TAB_ONLY_SITES: readonly ChatSite[] = ['grok', 'kimi']
+
+export function isEmbeddableChatSite(site: ChatSite | undefined): boolean {
+  return !site || !TAB_ONLY_SITES.includes(site)
+}
+
+export function defaultHostModeForSite(site: ChatSite | undefined): RoleHostMode {
+  return isEmbeddableChatSite(site) ? 'iframe' : 'tab'
 }

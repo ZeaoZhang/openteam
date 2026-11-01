@@ -27,6 +27,7 @@ import { createTeamUiController } from './teamUiController'
 import { emptyCard, getChatRecentSummary as getStoreChatRecentSummary, messageTitle, roleAvatarLabel, roleToneClass } from './viewHelpers'
 import { agentControlStatusState, agentControlStatusText } from './agentControlStatusView'
 import type { ConnectionReport } from '../background/hostModeHandlers'
+import { defaultHostModeForSite } from '../group/chatSites'
 import { createIndexedDbImageAttachmentRepository } from '../shared/imageAttachmentRepository'
 
 const appState = createTeamPageState()
@@ -520,7 +521,7 @@ function syncIframeHost(): void {
   if (!chat) return
   iframeHost.setEnabled(true)
   const roles = getCurrentRoles()
-  const siteRoles = roles.filter(role => role.modelSource !== 'external' && role.hostMode !== 'tab')
+  const siteRoles = roles.filter(role => role.modelSource !== 'external' && hostModeOf(role) !== 'tab')
   log.debug('iframe-sync:activate-chat', {
     chatId: chat.id,
     roleIds: siteRoles.map(role => role.id),
@@ -539,7 +540,7 @@ const HOSTED_ROLES_SYNC_THROTTLE_MS = 3000
  * a fresh TEAM_FRAME_ROLE_READY.
  */
 function syncHostedRoles(chatId: string): void {
-  if (!getCurrentRoles().some(role => role.hostMode === 'tab' && role.modelSource !== 'external')) return
+  if (!getCurrentRoles().some(role => hostModeOf(role) === 'tab' && role.modelSource !== 'external')) return
   const now = Date.now()
   if (now - hostedRolesSyncAt < HOSTED_ROLES_SYNC_THROTTLE_MS) return
   hostedRolesSyncAt = now
@@ -778,3 +779,7 @@ async function boot(): Promise<void> {
 }
 
 boot().catch(error => showError(error instanceof Error ? error.message : String(error)))
+
+function hostModeOf(role: { chatSite?: GroupRole['chatSite']; hostMode?: 'iframe' | 'tab' }): 'iframe' | 'tab' {
+  return role.hostMode ?? defaultHostModeForSite(role.chatSite)
+}
