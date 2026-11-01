@@ -72,7 +72,7 @@ export function createGlmAdapter(options: GlmAdapterOptions = {}): ChatSiteAdapt
     const sendButton = await waitForGlmSendButton(editor, Math.min(inputTimeoutMs, DEFAULT_SEND_BUTTON_TIMEOUT_MS))
 
     if (sendButton) {
-      sendButton.click()
+      pressGlmSendButton(sendButton)
       if (!(await waitForPromptDispatch({ editor, isDispatched: promptDispatched }))) submitEditorWithKeyboard(editor)
       return
     }
@@ -130,11 +130,27 @@ function extractConversationId(url: URL): string | undefined {
   return conversationId ? decodeURIComponent(conversationId) : undefined
 }
 
+const GLM_VERIFICATION_PATTERN = /滑动验证|访问验证|请按住滑块|别离开，为了更好的访问体验/
+const GLM_VERIFICATION_SELECTOR = '#aliyunCaptcha-sliding-wrapper, .aliyun-captcha, .aliyunCaptcha-show'
+
+/** chatglm.cn gates new sessions behind an Aliyun slider that cannot be solved from script. */
+export function isGlmVerificationPending(): boolean {
+  if (document.querySelector(GLM_SELECTORS.editor)) return false
+  if (document.querySelector(GLM_VERIFICATION_SELECTOR)) return true
+  const text = document.body?.innerText || document.body?.textContent || ''
+  return GLM_VERIFICATION_PATTERN.test(text)
+}
+
 async function waitForGlmEditor(timeoutMs: number): Promise<HTMLElement> {
   try {
     return await waitForElement(GLM_SELECTORS.editor, timeoutMs)
   } catch {
-    throw new Error('智谱清言输入框未出现（页面可能仍在加载、登录态失效或停在人机验证页），请在该角色页面里完成验证后重试')
+    if (isGlmVerificationPending()) {
+      throw new Error(
+        '智谱清言需要先完成人机验证：请在该角色的页面里拖动滑块完成验证，然后再点"重新回复"。若反复要求验证，可把该成员改为独立标签页承载，验证一次即可长期复用。',
+      )
+    }
+    throw new Error('智谱清言输入框未出现（页面可能仍在加载或登录态失效），请刷新该角色的页面后重试')
   }
 }
 
@@ -215,6 +231,31 @@ function extractCleanText(node: Node): string {
 
 function findResponseContainer(element: Element | null): Element | null {
   return findClosestMatchingAncestor(element, GLM_SELECTORS.response)
+}
+
+/**
+ * chatglm.cn's send control is a div whose handler runs on the pointer sequence, so a bare
+ * `click()` looks accepted but never submits. Replay the full press sequence before clicking.
+ */
+export function pressGlmSendButton(button: HTMLElement): void {
+  const rect = button.getBoundingClientRect()
+  const base: MouseEventInit = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    button: 0,
+    clientX: rect.left + rect.width / 2,
+    clientY: rect.top + rect.height / 2,
+  }
+  if (typeof PointerEvent === 'function') {
+    button.dispatchEvent(new PointerEvent('pointerdown', { ...base, pointerId: 1, isPrimary: true }))
+  }
+  button.dispatchEvent(new MouseEvent('mousedown', base))
+  if (typeof PointerEvent === 'function') {
+    button.dispatchEvent(new PointerEvent('pointerup', { ...base, pointerId: 1, isPrimary: true }))
+  }
+  button.dispatchEvent(new MouseEvent('mouseup', base))
+  button.click()
 }
 
 function isGlmGenerating(): boolean {

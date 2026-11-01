@@ -86,6 +86,33 @@ describe('GLM (智谱清言) site adapter', () => {
     expect(document.querySelectorAll('.conversation.question')).toHaveLength(1)
   })
 
+  it('replays the pointer sequence before clicking the send control', async () => {
+    document.body.innerHTML = `
+      <div class="input-box-inner"><textarea class="scroll-display-none"></textarea></div>
+      <div class="enter is-main-chat"><img class="enter_icon" alt="" /></div>
+    `
+    const send = document.querySelector<HTMLElement>('.enter.is-main-chat')!
+    const seen: string[] = []
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      send.addEventListener(type, () => seen.push(type))
+    }
+
+    const { pressGlmSendButton } = await import('./glm')
+    pressGlmSendButton(send)
+
+    expect(seen).toEqual(['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
+  })
+
+  it('asks for the slider when chatglm.cn gates the session', async () => {
+    document.body.innerHTML = `
+      <div class="aliyun-captcha" id="aliyunCaptcha-sliding-wrapper">
+        <div>访问验证</div><div>请按住滑块，拖动到最右边</div>
+      </div>
+    `
+
+    await expect(createGlmAdapter({ inputTimeoutMs: 30 }).fillAndSend('收到')).rejects.toThrow(/人机验证/)
+  })
+
   it('reads the searching state of the send control as generating', () => {
     document.body.innerHTML = '<div class="enter is-main-chat searching"></div>'
 
