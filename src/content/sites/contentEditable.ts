@@ -19,11 +19,26 @@ function noteWriteDiagnostic(step: string): void {
   lastWriteDiagnostics = step
 }
 
+export interface EditorWriteOptions {
+  allowPaste?: boolean
+  /**
+   * 'dom' skips the browser editing pipeline and writes block elements directly. Gemini's Quill
+   * editor keeps only the first paragraph when multiline text arrives through execCommand in a
+   * focused tab, while a paragraph-per-line DOM write stays in sync with the Quill document model.
+   */
+  strategy?: 'auto' | 'dom'
+}
+
 export function setContentEditableText(
   editor: HTMLElement,
   content: string,
-  options: { allowPaste?: boolean } = {},
+  options: EditorWriteOptions = {},
 ): void {
+  if (options.strategy === 'dom') {
+    writeWithDomMutation(editor, content)
+    lastWriteStrategy = 'dom'
+    return
+  }
   if (writeWithNativeEditingPipeline(editor, content)) {
     lastWriteStrategy = 'native'
     return
@@ -154,14 +169,21 @@ function writeWithNativeEditingPipeline(editor: HTMLElement, content: string): b
 export async function writeEditorTextWithRetry(
   editor: HTMLElement,
   content: string,
-  options: { attempts?: number; delayMs?: number; stabilityDelayMs?: number; allowPaste?: boolean } = {},
+  options: EditorWriteOptions & {
+    attempts?: number
+    delayMs?: number
+    stabilityDelayMs?: number
+  } = {},
 ): Promise<boolean> {
   const attempts = options.attempts ?? 4
   const delayMs = options.delayMs ?? 600
   const stabilityDelayMs = options.stabilityDelayMs ?? 400
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    setContentEditableText(editor, content, { allowPaste: options.allowPaste })
+    setContentEditableText(editor, content, {
+      allowPaste: options.allowPaste,
+      strategy: options.strategy,
+    })
     if (!editorHoldsText(editor, content)) {
       if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs))
       continue
@@ -219,9 +241,18 @@ function writeWithDomMutation(editor: HTMLElement, content: string): void {
   editor.focus()
   editor.replaceChildren()
 
-  const block = document.createElement('p')
-  block.textContent = content
-  editor.append(block)
+  // One paragraph per source line keeps block-oriented editors (Quill in Gemini, ProseMirror sites)
+  // from collapsing everything after the first newline into lost text. Blank lines need an explicit
+  // <br> so they survive as empty paragraphs instead of being dropped.
+  for (const line of content.split('\n')) {
+    const block = document.createElement('p')
+    if (line) {
+      block.textContent = line
+    } else {
+      block.append(document.createElement('br'))
+    }
+    editor.append(block)
+  }
 
   editor.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, inputType: 'insertText', data: content }))
   editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: content }))

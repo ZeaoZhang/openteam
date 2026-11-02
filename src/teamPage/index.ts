@@ -38,7 +38,7 @@ let store: OpenTeamStore = appState.store
 const teamDomRefs = createTeamPageDomRefs()
 const { appShellEl, closeWindowEl, toggleWindowSizeEl, toggleFullscreenEl, storeSummaryEl, chatListEl, chatTitleEl, chatSubtitleEl, chatStatusEl, messagesEl } = teamDomRefs
 const { roleSummaryEl, roleListEl, roleTemplateSelectEl, templateListEl, targetPreviewEl, busyPreviewEl, composerFormEl, sendButtonEl } = teamDomRefs
-const { messageInputEl, referenceDraftEl, mentionPanelEl, errorEl, newChatNameEl, createChatFormEl, quickCreateChatEl } = teamDomRefs
+const { messageInputEl, attachFileButtonEl, attachmentInputEl, attachmentDraftEl, referenceDraftEl, mentionPanelEl, errorEl, newChatNameEl, createChatFormEl, quickCreateChatEl } = teamDomRefs
 const { templateNameEl, templateDescriptionEl, templatePromptEl, templateAiDescriptionEl, generateTemplatePersonaEl, templatePersonaGenerationStatusEl, templateFormTitleEl, settingsButtonEl, settingsMenuEl, languageEnEl, languageZhEl, agentControlToggleEl, agentControlStatusEl, connectionCheckEl, connectionCheckResultsEl, themeLightEl, themeDarkEl } = teamDomRefs
 const { openAllNotesEl, closeAllNotesEl, allNotesModalEl, allNotesListEl, allNotesActiveTitleEl, allNotesActiveMetaEl, allNotesEditorEl } = teamDomRefs
 const { allNoteBoldEl, allNoteItalicEl, allNoteStrikeEl, allNoteBulletListEl, allNoteOrderedListEl, allNoteUndoEl, allNoteRedoEl } = teamDomRefs
@@ -218,6 +218,10 @@ const composerView = createComposerView({
   busyPreviewEl,
   sendButtonEl,
   messageInputEl,
+  attachFileButtonEl,
+  attachmentInputEl,
+  attachmentDraftEl,
+  attachmentRepository: imageAttachmentRepository,
   referenceDraftEl,
   mentionPanelEl,
   getStore: () => store,

@@ -24,6 +24,8 @@ export interface RoleMentionLabelOptions {
 
 export interface ParseGroupMentionsOptions extends RoleMentionLabelOptions {
   defaultTarget?: 'all' | 'none'
+  /** Allow an empty text body when the message only carries attachments. */
+  allowEmpty?: boolean
 }
 
 export function defaultMentionTargetForMessage(raw: string, chat: Pick<GroupChat, 'mode' | 'requireManualMention'>): 'all' | 'none' {
@@ -35,7 +37,10 @@ export function defaultMentionTargetForMessage(raw: string, chat: Pick<GroupChat
 
 export function parseGroupMentions(raw: string, roles: GroupRole[], options: ParseGroupMentionsOptions = {}): ParsedGroupMention {
   const trimmed = raw.trim()
-  if (!trimmed) return { ok: false, error: '消息内容不能为空' }
+  if (!trimmed) {
+    if (!options.allowEmpty) return { ok: false, error: '消息内容不能为空' }
+    return { ok: true, content: '', targetRoleIds: defaultTargetRoleIds(roles.map(role => role.id), options), mentionedRoleIds: [] }
+  }
 
   const allRoleIds = roles.map(role => role.id)
   if (!trimmed.includes('@')) {

@@ -2311,6 +2311,146 @@ select:focus {
   line-height: 1;
 }
 
+.composer-attachments {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.composer-attach {
+  flex: 0 0 auto;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.composer-file-input {
+  display: none;
+}
+
+.attachment-draft {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.attachment-draft[hidden] {
+  display: none;
+}
+
+.attachment-chip {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  max-width: 230px;
+  border: 1px solid rgba(132, 153, 171, 0.24);
+  border-radius: 8px;
+  padding: 4px 6px 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+}
+
+.attachment-chip-thumb {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.attachment-chip-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: rgba(47, 216, 204, 0.1);
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.attachment-chip-name {
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-chip-size {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.attachment-chip-remove {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.attachment-chip-remove:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.message-file-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.message-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  border: 1px solid rgba(132, 153, 171, 0.24);
+  border-radius: 8px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.message-file-chip:hover {
+  border-color: rgba(47, 216, 204, 0.42);
+  background: rgba(47, 216, 204, 0.07);
+}
+
+.message-file-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-file-chip-size {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 #message-input {
   min-height: 98px;
   max-height: 150px;

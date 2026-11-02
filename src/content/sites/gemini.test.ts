@@ -35,13 +35,46 @@ describe('Gemini site adapter', () => {
     expect(inputListener).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps every paragraph when a focused tab would make execCommand truncate', async () => {
+    document.body.innerHTML = '<rich-textarea><div contenteditable="true"></div></rich-textarea>'
+    const editor = document.querySelector<HTMLElement>('[contenteditable="true"]')!
+    Object.defineProperty(editor, 'isContentEditable', { configurable: true, value: true })
+    const originalExecCommand = document.execCommand
+    const execCommand = vi.fn((command: string, _showUI?: boolean, value?: string) => {
+      if (command === 'insertText') {
+        editor.textContent = String(value ?? '').split('\n')[0]
+        return true
+      }
+      if (command === 'delete') {
+        editor.textContent = ''
+        return true
+      }
+      return false
+    })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand })
+
+    try {
+      await createGeminiAdapter().fillAndSend('第一行\n第二行\n第三行', false)
+
+      expect(editor.querySelectorAll('p')).toHaveLength(3)
+      expect(editor.textContent).toBe('第一行第二行第三行')
+      expect(execCommand).not.toHaveBeenCalledWith('insertText', false, expect.anything())
+    } finally {
+      Object.defineProperty(document, 'execCommand', { configurable: true, value: originalExecCommand })
+      Object.defineProperty(editor, 'isContentEditable', { configurable: true, value: false })
+    }
+  })
+
   it('waits for a clickable send button before clicking', async () => {
     document.body.innerHTML = `
       <rich-textarea><div contenteditable="true"></div></rich-textarea>
       <button class="send-button" aria-label="Send" disabled>Send</button>
     `
     const button = document.querySelector<HTMLButtonElement>('button')!
-    const clickListener = vi.fn()
+    const editor = document.querySelector<HTMLElement>('[contenteditable="true"]')!
+    const clickListener = vi.fn(() => {
+      editor.innerHTML = '<p><br></p>'
+    })
     button.addEventListener('click', clickListener)
     window.setTimeout(() => {
       button.disabled = false
@@ -59,8 +92,28 @@ describe('Gemini site adapter', () => {
       <button class="send-button" aria-label="Send">Live Send</button>
     `
     const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')]
-    const clickListener = vi.fn()
+    const editor = document.querySelector<HTMLElement>('[contenteditable="true"]')!
+    const clickListener = vi.fn(() => {
+      editor.innerHTML = '<p><br></p>'
+    })
     buttons[1]?.addEventListener('click', clickListener)
+
+    await createGeminiAdapter({ inputTimeoutMs: 250 }).fillAndSend('hello', true)
+
+    expect(clickListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('clicks the current Gemini send button whose aria-label is just 发送', async () => {
+    document.body.innerHTML = `
+      <rich-textarea><div contenteditable="true"></div></rich-textarea>
+      <button class="mdc-icon-button" aria-label="发送"><mat-icon>arrow_upward</mat-icon></button>
+    `
+    const button = document.querySelector<HTMLButtonElement>('button')!
+    const editor = document.querySelector<HTMLElement>('[contenteditable="true"]')!
+    const clickListener = vi.fn(() => {
+      editor.innerHTML = '<p><br></p>'
+    })
+    button.addEventListener('click', clickListener)
 
     await createGeminiAdapter({ inputTimeoutMs: 250 }).fillAndSend('hello', true)
 
@@ -71,7 +124,10 @@ describe('Gemini site adapter', () => {
     document.body.innerHTML = '<rich-textarea><div contenteditable="true"></div></rich-textarea>'
     const editor = document.querySelector<HTMLElement>('[contenteditable="true"]')!
     const keydownListener = vi.fn((event: KeyboardEvent) => {
-      if (event.key === 'Enter') event.preventDefault()
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        editor.innerHTML = '<p><br></p>'
+      }
     })
     editor.addEventListener('keydown', keydownListener)
 

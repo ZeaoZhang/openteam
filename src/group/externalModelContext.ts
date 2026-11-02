@@ -11,6 +11,7 @@ export interface ExternalModelPromptResult {
 export interface BuildExternalModelPromptOptions {
   responseInstruction?: string
   maxContextChars?: number
+  attachmentContext?: string
 }
 
 export type ExternalMemoryPatch =
@@ -79,6 +80,7 @@ function buildPromptWithExternalContext(
     reference: userMessage.references?.[0],
     includePersona: true,
     responseInstruction: options.responseInstruction,
+    attachmentContext: options.attachmentContext,
     language,
   })
   if (chat.mode === 'collaborative' || contextMessages.length === 0) return basePrompt

@@ -5,6 +5,16 @@ import { OPENTEAM_CONTROL_DEFAULT_PORT, type OpenTeamControlConnectionStatus } f
 export type CachedMessageNode = { signature: string; node: HTMLElement; streamingSignature?: string }
 export type TemporaryPersonDraft = Pick<RoleTemplate, 'name' | 'description' | 'systemPrompt'> & { id: string; chatSite: ChatSite }
 
+export interface PendingComposerAttachment {
+  id: string
+  chatId: string
+  kind: 'image' | 'text' | 'document'
+  fileName: string
+  mimeType: string
+  size: number
+  previewUrl?: string
+}
+
 export interface RoleReadyWaiter {
   chatId: string
   roleIds: Set<string>
@@ -21,6 +31,7 @@ export interface TeamPageState {
   selectedRoleId?: string
   selectedTemplateId?: string
   selectedReference?: MessageReference
+  pendingComposerAttachments: PendingComposerAttachment[]
   hostTabId?: number
   mentionIndex: number
   peopleDrawerOpen: boolean
@@ -55,6 +66,7 @@ export function createTeamPageState(): TeamPageState {
     store: createDefaultStore(),
     controlStatus: { state: 'disabled', port: OPENTEAM_CONTROL_DEFAULT_PORT },
     mentionIndex: 0,
+    pendingComposerAttachments: [],
     peopleDrawerOpen: false,
     thinkingTimeoutTimers: [],
     loggedThinkingTimeoutRoleIds: new Set<string>(),

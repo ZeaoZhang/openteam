@@ -13,6 +13,8 @@ export interface BuildPromptInput {
   reference?: MessageReference
   includePersona?: boolean
   responseInstruction?: string
+  /** Text extracted from user attachments plus descriptors for binary files. */
+  attachmentContext?: string
   language?: OpenTeamLanguage
 }
 
@@ -29,6 +31,7 @@ export function buildIndependentPrompt(input: BuildPromptInput): string {
     language === 'en' ? `You are "${input.role.name}".` : `你是「${input.role.name}」。`,
     buildRoleBlock(input.role, input.includePersona ?? true, language),
     buildReferenceBlock(reference, language),
+    buildAttachmentBlock(input.attachmentContext, language),
     language === 'en' ? `User message:\n${input.userMessage.content}` : `用户消息：\n${input.userMessage.content}`,
     input.responseInstruction ?? independentResponseInstruction(input.role.name, Boolean(reference), language),
   ])
@@ -45,6 +48,7 @@ export function buildCollaborativePrompt(input: BuildPromptInput): string {
     buildRoleBlock(input.role, input.includePersona ?? true, language),
     buildContextBlock(input, language),
     buildReferenceBlock(reference, language),
+    buildAttachmentBlock(input.attachmentContext, language),
     language === 'en' ? `User latest message:\n${input.userMessage.content}` : `用户最新消息：\n${input.userMessage.content}`,
     input.responseInstruction ?? collaborativeResponseInstruction(input.role.name, Boolean(reference), language),
   ])
@@ -122,6 +126,11 @@ function buildContextBlock(input: BuildPromptInput, language: OpenTeamLanguage):
   }
 
   return `${language === 'en' ? '[Some earlier context has been omitted]' : '[部分早期上下文已省略]'}\n\n${language === 'en' ? 'Since your last turn, the group chat has these new items:' : '你上次之后，群聊里有这些新内容：'}\n${context.slice(-maxContextChars).trimStart()}`
+}
+
+function buildAttachmentBlock(attachmentContext: string | undefined, language: OpenTeamLanguage): string {
+  if (!attachmentContext?.trim()) return ''
+  return `${language === 'en' ? 'Attachments sent with this message:' : '本条消息附带的文件：'}\n${attachmentContext.trim()}`
 }
 
 function buildReferenceBlock(reference: MessageReference | undefined, language: OpenTeamLanguage): string {

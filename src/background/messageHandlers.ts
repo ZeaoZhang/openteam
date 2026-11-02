@@ -4,7 +4,8 @@ import { normalizeMessageHighlightColor } from '../group/highlightColors'
 import { defaultMentionTargetForMessage, parseGroupMentions, roleMentionLabelOptionsFromSettings } from '../group/mentionParser'
 import { mapRuntimeRoleStatus } from '../group/runtimeProtocol'
 import type { BackgroundToRoleMessage } from '../group/runtimeProtocol'
-import type { ChatSite, ExternalModelConfig, GroupChat, GroupMessage, GroupRole, MessageImageAttachment, MessageReference, OpenTeamStore, OrchestrationFlow, ReplyImageSource, RoleSiteHealthStatus, RuntimeFrameBinding } from '../group/types'
+import type { ChatSite, ExternalModelConfig, GroupChat, GroupMessage, GroupRole, MessageAttachment, MessageImageAttachment, MessageReference, OpenTeamStore, OrchestrationFlow, ReplyImageSource, RoleSiteHealthStatus, RuntimeFrameBinding } from '../group/types'
+import { attachmentDraftsFromMessage, loadUserAttachments, parseAttachmentDrafts, type LoadedUserAttachments, type UserAttachmentRepository } from './userAttachments'
 import { createExternalModelClient, type ExternalModelClient } from './externalModelClient'
 import type { BackgroundMessageRoute } from './messageRouter'
 import type { PromptDelivery, PromptSender } from './promptDelivery'
@@ -64,6 +65,7 @@ export interface MessageHandlersDependencies {
     captureReplyImages(input: { chatId: string; messageId: string; images: ReplyImageSource[] }): Promise<MessageImageAttachment[]>
     deleteByIds(ids: string[]): Promise<void>
   }
+  attachmentRepository?: UserAttachmentRepository
   deliveryRetryDelaysMs?: readonly number[]
   externalModelRetryDelaysMs?: readonly number[]
   roleErrorRetryDelaysMs?: readonly number[]
@@ -78,14 +80,24 @@ export function createMessageHandlers(deps: MessageHandlersDependencies): Backgr
 
   const handleMessageSend = async (message: RuntimeMessage) => {
     const chatId = requireString(message.chatId, '缺少群聊 ID')
-    const raw = requireString(message.raw, '消息内容不能为空')
+    const attachmentDrafts = parseAttachmentDrafts(message.attachments)
+    const raw = readOptionalString(message.raw) ?? ''
+    if (!raw && attachmentDrafts.length === 0) throw new Error('消息内容不能为空')
+    const loadedAttachments = await loadUserAttachments(attachmentDrafts, deps.attachmentRepository, chatId)
+    if (loadedAttachments.uploads.length > 0) {
+      deps.log.info('message-send:attachments-loaded', {
+        chatId,
+        attachmentCount: loadedAttachments.uploads.length,
+        uploadBytes: loadedAttachments.uploads.reduce((total, attachment) => total + attachment.size, 0),
+      })
+    }
     const timestamp = deps.now()
-    deps.log.info('message-send:start', { chatId, rawLength: raw.length })
+    deps.log.info('message-send:start', { chatId, rawLength: raw.length, attachmentCount: attachmentDrafts.length })
 
     const { store, result } = await mutateStore(store => {
       const chat = requireChat(store, chatId)
       const roles = getChatRoles(store, chat)
-      const parsed = parseGroupMentions(raw, roles, { ...roleMentionLabelOptionsFromSettings(store.settings), defaultTarget: defaultMentionTargetForMessage(raw, chat) })
+      const parsed = parseGroupMentions(raw, roles, { ...roleMentionLabelOptionsFromSettings(store.settings), defaultTarget: defaultMentionTargetForMessage(raw, chat), allowEmpty: attachmentDrafts.length > 0 })
       if (!parsed.ok) throw new Error(parsed.error)
 
       if (parsed.orchestrationTarget) {
@@ -157,6 +169,7 @@ export function createMessageHandlers(deps: MessageHandlersDependencies): Backgr
         mentionedRoleIds: parsed.mentionedRoleIds,
         mentionsAll: parsed.mentionsAll,
         references: reference ? [reference] : undefined,
+        attachments: loadedAttachments.attachments.length > 0 ? loadedAttachments.attachments : undefined,
         createdAt: timestamp,
         status: finalTargetRoleIds.length > 0 ? 'pending' : 'received',
         deliveryStatus: Object.fromEntries(finalTargetRoleIds.map(roleId => [roleId, unavailable.some(role => role.id === roleId) ? 'error' : 'pending'])),
@@ -178,7 +191,7 @@ export function createMessageHandlers(deps: MessageHandlersDependencies): Backgr
       const deliveries: PromptDelivery[] = []
       const externalDeliveries: ExternalPromptDelivery[] = []
       for (const role of deliverableTargetRoles) {
-        const prepared = prepareRolePromptDelivery({ store, chat, role, userMessage, roles, messages, reference, timestamp, newId: deps.newId, runtimeFrames: deps.runtimeFrames })
+        const prepared = prepareRolePromptDelivery({ store, chat, role, userMessage, roles, messages, reference, attachmentContext: loadedAttachments.attachmentContext, attachments: loadedAttachments.uploads, timestamp, newId: deps.newId, runtimeFrames: deps.runtimeFrames })
         if (prepared.delivery) deliveries.push(prepared.delivery)
         if (prepared.externalDelivery) externalDeliveries.push(prepared.externalDelivery)
         if (!prepared.includesPersona && prepared.delivery) {
@@ -216,6 +229,15 @@ export function createMessageHandlers(deps: MessageHandlersDependencies): Backgr
     }
     const messageResult = result as { message: GroupMessage; deliveries: PromptDelivery[]; externalDeliveries: ExternalPromptDelivery[] }
 
+    if (deps.attachmentRepository && loadedAttachments.attachments.length > 0) {
+      await Promise.all(loadedAttachments.attachments.map(async attachment => {
+        const record = await deps.attachmentRepository!.get(attachment.id)
+        if (record && record.messageId !== messageResult.message.id) {
+          await deps.attachmentRepository!.put({ ...record, messageId: messageResult.message.id })
+        }
+      })).catch(error => deps.log.warn('message-send:attachment-reindex-failed', { messageId: messageResult.message.id, error: error instanceof Error ? error.message : String(error) }))
+    }
+
     deps.log.info('message-send:deliveries-ready', {
       chatId,
       messageId: messageResult.message.id,
@@ -249,7 +271,7 @@ export function createMessageHandlers(deps: MessageHandlersDependencies): Backgr
     const timestamp = deps.now()
     let discardedAttachmentIds: string[] = []
 
-    const { store, result } = await mutateStore(store => {
+    const { store, result } = await mutateStore(async store => {
       const chat = requireChat(store, chatId)
       const role = requireRole(store, chat.id, roleId)
       const requestedMessageId = readOptionalString(message.messageId)
@@ -264,7 +286,8 @@ export function createMessageHandlers(deps: MessageHandlersDependencies): Backgr
       const roles = getChatRoles(store, chat)
       const messages = getChatMessages(store, chat)
       const reference = userMessage.references?.[0]
-      const prepared = prepareRolePromptDelivery({ store, chat, role, userMessage, roles, messages, reference, timestamp, newId: deps.newId, runtimeFrames: deps.runtimeFrames })
+      const loadedAttachments: LoadedUserAttachments = await loadUserAttachments(attachmentDraftsFromMessage(userMessage), deps.attachmentRepository, chat.id)
+      const prepared = prepareRolePromptDelivery({ store, chat, role, userMessage, roles, messages, reference, attachmentContext: loadedAttachments.attachmentContext, attachments: loadedAttachments.uploads, timestamp, newId: deps.newId, runtimeFrames: deps.runtimeFrames })
 
       userMessage.deliveryStatus ??= {}
       userMessage.deliveryStatus[role.id] = 'pending'
@@ -1717,7 +1740,7 @@ function requireImageAttachmentService(deps: MessageHandlersDependencies): NonNu
   return deps.imageAttachments
 }
 
-function readyAttachmentIds(attachments: MessageImageAttachment[] | undefined): string[] {
+function readyAttachmentIds(attachments: MessageAttachment[] | undefined): string[] {
   return (attachments ?? []).filter(attachment => attachment.status === 'ready').map(attachment => attachment.id)
 }
 

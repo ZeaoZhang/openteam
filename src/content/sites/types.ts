@@ -1,5 +1,5 @@
 import type { SiteStatus } from '../../group/runtimeProtocol'
-import type { ReplyImageSource } from '../../group/types'
+import type { PromptAttachmentPayload, ReplyImageSource } from '../../group/types'
 
 export interface SiteStatusInfo {
   status: SiteStatus
@@ -27,5 +27,8 @@ export interface ChatSiteAdapter {
   checkStatus?(): SiteStatusInfo
   stopGenerating(): Promise<boolean>
   fillAndSend(content: string, autoSend?: boolean): Promise<void>
+  /** Whether this site can accept user files through its native upload control. */
+  readonly supportsFileUpload?: boolean
+  uploadAttachments?(attachments: PromptAttachmentPayload[]): Promise<void>
   collectPromptDiagnostics(): Record<string, unknown>
 }

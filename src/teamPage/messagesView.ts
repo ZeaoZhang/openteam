@@ -2,7 +2,7 @@ import MarkdownIt from 'markdown-it'
 import { extractMarkdownFromDom } from '../content/sites/domMarkdown'
 import { DEFAULT_MESSAGE_HIGHLIGHT_COLOR, MESSAGE_HIGHLIGHT_COLORS, messageHighlightColorRgb, type MessageHighlightColor } from '../group/highlightColors'
 import { roleMentionLabel, roleMentionLabelOptionsFromSettings, roleModelLabel } from '../group/mentionParser'
-import type { GroupChat, GroupMessage, GroupRole, MessageHighlight, MessageImageAttachment, MessageReference, OpenTeamStore, OrchestrationReviewResult } from '../group/types'
+import type { GroupChat, GroupMessage, GroupRole, MessageFileAttachment, MessageHighlight, MessageImageAttachment, MessageReference, OpenTeamStore, OrchestrationReviewResult } from '../group/types'
 import type { ImageAttachmentBlobRecord } from '../shared/imageAttachmentRepository'
 import type { TeamPageState } from './appState'
 import { buildChatRenderItems, getChatStartupNotice, getStoppedReplyRoles, getVisibleThinkingRoles, THINKING_TIMEOUT_MS } from './chatExperience'
@@ -214,6 +214,8 @@ export function createMessagesView(deps: MessagesViewDependencies): MessagesView
     if (hasVisibleTextBody) bubble.append(body)
     const imageGrid = renderMessageImageGrid(message)
     if (imageGrid) bubble.append(imageGrid)
+    const fileChips = renderMessageFileChips(message)
+    if (fileChips) bubble.append(fileChips)
     const reviewSummary = renderOrchestrationReviewSummary(message)
     if (reviewSummary) bubble.append(reviewSummary)
     if (message.references?.length) bubble.append(referenceBox(message.references[0]))
@@ -296,6 +298,53 @@ export function createMessagesView(deps: MessagesViewDependencies): MessagesView
     return grid
   }
 
+  function renderMessageFileChips(message: GroupMessage): HTMLElement | undefined {
+    const attachments = message.attachments?.filter((attachment): attachment is MessageFileAttachment => attachment.type === 'file') ?? []
+    if (attachments.length === 0) return undefined
+
+    const row = document.createElement('div')
+    row.className = 'message-file-chips'
+    for (const attachment of attachments) {
+      const chip = document.createElement('button')
+      chip.type = 'button'
+      chip.className = 'message-file-chip'
+      chip.title = attachment.fileName
+      const icon = document.createElement('span')
+      icon.className = 'attachment-chip-icon'
+      icon.textContent = attachment.kind === 'text' ? 'TXT' : 'FILE'
+      const name = document.createElement('span')
+      name.className = 'message-file-chip-name'
+      name.textContent = attachment.fileName
+      const size = document.createElement('span')
+      size.className = 'message-file-chip-size'
+      size.textContent = formatAttachmentSize(attachment.size)
+      chip.append(icon, name, size)
+      chip.addEventListener('click', () => {
+        downloadFileAttachment(attachment).catch(error => deps.showError(error instanceof Error ? error.message : String(error)))
+      })
+      row.append(chip)
+    }
+    return row
+  }
+
+  function formatAttachmentSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  async function downloadFileAttachment(attachment: MessageFileAttachment): Promise<void> {
+    const record = await deps.loadImageAttachment?.(attachment.id)
+    if (!record) throw new Error('本地附件不可用，请重新发送')
+    const url = URL.createObjectURL(record.blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = attachment.fileName
+    anchor.rel = 'noreferrer'
+    anchor.click()
+    globalThis.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   function renderImageAttachment(message: GroupMessage, attachment: MessageImageAttachment): HTMLElement {
     const tile = document.createElement('div')
     tile.className = `message-image-tile ${attachment.status === 'error' ? 'message-image-error' : 'message-image-loading'}`
@@ -321,7 +370,7 @@ export function createMessagesView(deps: MessagesViewDependencies): MessagesView
     preview.setAttribute('aria-label', '预览图片')
     preview.disabled = true
     const image = document.createElement('img')
-    image.alt = attachment.alt || 'ChatGPT 生成图片'
+    image.alt = attachment.alt || attachment.fileName || '图片附件'
     image.loading = 'lazy'
     image.decoding = 'async'
     if (attachment.width) image.width = attachment.width

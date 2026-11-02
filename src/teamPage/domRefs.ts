@@ -18,6 +18,9 @@ export interface TeamPageDomRefs {
   composerFormEl: HTMLFormElement
   sendButtonEl: HTMLButtonElement
   messageInputEl: HTMLTextAreaElement
+  attachFileButtonEl: HTMLButtonElement
+  attachmentInputEl: HTMLInputElement
+  attachmentDraftEl: HTMLElement
   referenceDraftEl: HTMLElement
   mentionPanelEl: HTMLElement
   errorEl: HTMLElement
@@ -184,6 +187,9 @@ export function createTeamPageDomRefs(): TeamPageDomRefs {
     composerFormEl: requireElement<HTMLFormElement>('#composer'),
     sendButtonEl: requireElement<HTMLButtonElement>('#send-message'),
     messageInputEl: requireElement<HTMLTextAreaElement>('#message-input'),
+    attachFileButtonEl: requireElement<HTMLButtonElement>('#attach-file'),
+    attachmentInputEl: requireElement<HTMLInputElement>('#attachment-input'),
+    attachmentDraftEl: requireElement<HTMLElement>('#attachment-draft'),
     referenceDraftEl: requireElement<HTMLElement>('#reference-draft'),
     mentionPanelEl: requireElement<HTMLElement>('#mention-panel'),
     errorEl: requireElement<HTMLElement>('#error'),

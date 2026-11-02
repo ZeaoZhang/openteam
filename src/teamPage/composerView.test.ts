@@ -51,6 +51,26 @@ describe('team page composer targeting', () => {
     expect(deps.targetPreviewEl.textContent).toBe('将发送给：工程师（DeepSeek）')
   })
 
+  it('sends an attachment-only message with file metadata', async () => {
+    const { view, deps, runCommand } = createComposerHarness()
+    view.registerComposerEvents()
+    const file = new File(['hello'], 'note.txt', { type: 'text/plain' })
+    Object.defineProperty(deps.attachmentInputEl, 'files', { value: [file], configurable: true })
+
+    deps.attachmentInputEl.dispatchEvent(new Event('change'))
+    await vi.waitFor(() => expect(deps.state.pendingComposerAttachments).toHaveLength(1))
+
+    await view.submitComposerMessage()
+
+    expect(runCommand).toHaveBeenCalledWith('GROUP_MESSAGE_SEND', {
+      chatId: 'chat-1',
+      raw: '',
+      reference: undefined,
+      attachments: [{ id: expect.any(String), kind: 'text', fileName: 'note.txt', mimeType: 'text/plain', size: 5 }],
+    })
+    expect(deps.state.pendingComposerAttachments).toHaveLength(0)
+  })
+
   it('confirms the default all-members mention with Enter from the keyboard', () => {
     const { view, deps, runCommand } = createComposerHarness()
     view.registerComposerEvents()
@@ -136,6 +156,7 @@ describe('team page composer targeting', () => {
       chatId: 'chat-1',
       raw: '先记录这个背景',
       reference: undefined,
+      attachments: [],
     })
   })
 
@@ -156,6 +177,7 @@ describe('team page composer targeting', () => {
       chatId: 'chat-1',
       raw: '@all 请一起评估',
       reference: undefined,
+      attachments: [],
     })
   })
 })
@@ -194,6 +216,17 @@ function createComposerHarness(options: { roleStatus?: GroupRole['status']; role
     busyPreviewEl: document.createElement('div'),
     sendButtonEl: document.createElement('button'),
     messageInputEl: document.createElement('textarea'),
+    attachFileButtonEl: document.createElement('button'),
+    attachmentInputEl: document.createElement('input'),
+    attachmentDraftEl: document.createElement('div'),
+    attachmentRepository: {
+      put: vi.fn(async () => undefined),
+      get: vi.fn(async () => undefined),
+      deleteByIds: vi.fn(async () => undefined),
+      deleteByMessageIds: vi.fn(async () => undefined),
+      deleteByChatId: vi.fn(async () => undefined),
+      deleteOrphans: vi.fn(async () => undefined),
+    },
     referenceDraftEl: document.createElement('div'),
     mentionPanelEl,
     getStore: () => store,

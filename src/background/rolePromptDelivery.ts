@@ -3,7 +3,7 @@ import { contextCharBudgetForRole } from '../group/contextBudget'
 import { buildExternalModelPrompt, type ExternalMemoryPatch } from '../group/externalModelContext'
 import { buildOrchestrationReviewResponseInstruction } from '../group/orchestrationPrompts'
 import { buildPrompt, roleUsesChatGptGptsPersona } from '../group/promptBuilder'
-import type { ExternalModelConfig, GroupChat, GroupMessage, GroupRole, MessageReference, OpenTeamStore } from '../group/types'
+import type { ExternalModelConfig, GroupChat, GroupMessage, GroupRole, MessageReference, OpenTeamStore, PromptAttachmentPayload } from '../group/types'
 import type { PromptDelivery } from './promptDelivery'
 import type { RuntimeFrameRegistry } from './runtimeFrames'
 
@@ -33,6 +33,8 @@ export interface PrepareRolePromptDeliveryInput {
   roles: GroupRole[]
   messages: GroupMessage[]
   reference?: MessageReference
+  attachmentContext?: string
+  attachments?: PromptAttachmentPayload[]
   timestamp: number
   newId(prefix: string): string
   runtimeFrames: Pick<RuntimeFrameRegistry, 'getByRole'>
@@ -47,7 +49,7 @@ export function prepareRolePromptDelivery(input: PrepareRolePromptDeliveryInput)
 
   if (isExternalModelRole(input.role)) {
     const model = requireExternalModelForRole(input.store, input.role)
-    const prompt = buildExternalModelPrompt(input.store, input.chat, input.role, input.userMessage, input.roles, { responseInstruction, maxContextChars })
+    const prompt = buildExternalModelPrompt(input.store, input.chat, input.role, input.userMessage, input.roles, { responseInstruction, maxContextChars, attachmentContext: input.attachmentContext })
     if (prompt.memoryPatch) applyExternalMemoryPatch(input.store, prompt.memoryPatch, input.timestamp)
     return {
       includesPersona,
@@ -76,6 +78,7 @@ export function prepareRolePromptDelivery(input: PrepareRolePromptDeliveryInput)
     reference: input.reference,
     includePersona: includesPersona,
     responseInstruction,
+    attachmentContext: input.attachmentContext,
     language: input.store.settings.language,
   })
 
@@ -96,6 +99,7 @@ export function prepareRolePromptDelivery(input: PrepareRolePromptDeliveryInput)
         replyAttemptId,
         content,
         includesPersona,
+        attachments: input.attachments?.length ? input.attachments : undefined,
       },
     },
   }

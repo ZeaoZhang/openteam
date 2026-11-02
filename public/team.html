@@ -159,6 +159,11 @@
         <form id="composer" class="composer">
           <div id="reference-draft" class="reference-draft" hidden></div>
           <div id="mention-panel" class="mention-panel" hidden></div>
+          <div class="composer-attachments">
+            <button id="attach-file" class="btn btn-ghost composer-attach" type="button" aria-label="添加图片或文件" title="添加图片或文件">📎</button>
+            <div id="attachment-draft" class="attachment-draft" hidden></div>
+            <input id="attachment-input" class="composer-file-input" type="file" multiple hidden />
+          </div>
           <textarea id="message-input" placeholder="输入消息，@成员可指定回复；不 @ 仅记录到群聊。"></textarea>
           <div class="composer-actions">
             <div>

@@ -2,8 +2,9 @@ import type { ReplyImageSource } from '../../group/types'
 import type { ChatSiteAdapter, ConversationSnapshot } from './types'
 import { keepDeepestResponseContainers } from '../responseContainers'
 import { readResponseTextFromCopyAction, findClickableCopyButton } from './clipboardCopy'
-import { editorHoldsText, setContentEditableText } from './contentEditable'
+import { readEditorText, writeEditorTextWithRetry } from './contentEditable'
 import { extractMarkdownFromDom } from './domMarkdown'
+import { uploadPromptAttachments } from './attachments'
 import { buttonLabelMatches, describeElement, extractCleanTextFromDom, findClosestMatchingAncestor } from './domText'
 import { isClickableButton, waitForClickableButton, waitForElement } from './waitForElement'
 
@@ -17,7 +18,7 @@ const DEFAULT_CLIPBOARD_POLL_MS = 40
 const GEMINI_SELECTORS = {
   editor: 'div.ql-editor[contenteditable="true"], rich-textarea div[contenteditable="true"]',
   sendButton:
-    'button.send-button[aria-label*="发送"], button.send-button[aria-label*="Send"], button[aria-label*="Send message"], button[aria-label*="发送消息"]',
+    'button.send-button[aria-label*="发送"], button.send-button[aria-label*="Send"], button[aria-label="发送"], button[aria-label="Send message"], button[aria-label*="发送消息"], button[aria-label*="Send message"]',
   response: 'model-response, .model-response-text, message-content',
   copyButton:
     'button[data-test-id="copy-button"], copy-button button, button[mattooltip="复制回答"], button[aria-label="复制"], button[aria-label*="Copy"], button[aria-label*="复制"]',
@@ -69,8 +70,16 @@ export function createGeminiAdapter(options: GeminiAdapterOptions = {}): ChatSit
   async function fillAndSend(content: string, autoSend = true): Promise<void> {
     const editor = await waitForElement(GEMINI_SELECTORS.editor, inputTimeoutMs)
 
-    setContentEditableText(editor, content)
-    if (!editorHoldsText(editor, content)) {
+    // Gemini's Quill composer accepts execCommand text but keeps only the first paragraph once it
+    // normalizes the draft, so tab-hosted (focused) pages silently truncate multi-line prompts.
+    // Write paragraph blocks directly and wait for Quill to settle before declaring success.
+    const accepted = await writeEditorTextWithRetry(editor, content, {
+      strategy: 'dom',
+      attempts: 3,
+      delayMs: 300,
+      stabilityDelayMs: 400,
+    })
+    if (!accepted) {
       throw new Error('Gemini editor did not accept the prompt text')
     }
 
@@ -82,6 +91,13 @@ export function createGeminiAdapter(options: GeminiAdapterOptions = {}): ChatSit
     } catch (error) {
       if (!tryKeyboardSubmit(editor)) throw error
     }
+
+    // A synthetic Enter is ignored by Gemini, and the send button can silently do nothing when its
+    // markup changes again. Only report success once the composer actually cleared its draft.
+    if (await waitForDraftCleared(editor, 2500)) return
+    tryKeyboardSubmit(editor)
+    if (await waitForDraftCleared(editor, 2500)) return
+    throw new Error('Gemini 未能提交提示词，请稍后重试')
   }
 
   return {
@@ -98,6 +114,17 @@ export function createGeminiAdapter(options: GeminiAdapterOptions = {}): ChatSit
     isGenerating: isGeminiGenerating,
     stopGenerating: stopGeminiGenerating,
     fillAndSend,
+    supportsFileUpload: true,
+    uploadAttachments: attachments => uploadPromptAttachments(attachments, {
+      inputSelectors: ['input[type="file"]'],
+      openButtonSelectors: [
+        'button[aria-label="上传和工具"]',
+        'button[aria-label*="上传"]',
+        'button[aria-label*="Upload"]',
+        'button[aria-label*="upload"]',
+      ],
+      previewSelectors: ['.attachment-preview-wrapper', 'uploader-file-preview', '.file-preview-chip'],
+    }),
     collectPromptDiagnostics,
   }
 }
@@ -215,6 +242,15 @@ async function stopGeminiGenerating(): Promise<boolean> {
 
 function findGeminiStopButton(): HTMLButtonElement | undefined {
   return [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => buttonLabelMatches(button, /stop|stopping|停止|中止/) && isClickableButton(button))
+}
+
+async function waitForDraftCleared(editor: HTMLElement, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!editor.isConnected || readEditorText(editor).length === 0) return true
+    await new Promise(resolve => window.setTimeout(resolve, 100))
+  }
+  return false
 }
 
 function tryKeyboardSubmit(editor: HTMLElement): boolean {

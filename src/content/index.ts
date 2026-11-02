@@ -269,6 +269,19 @@ function handleSendPromptMessage(message: Extract<BackgroundToRoleMessage, { typ
       log.info('message:send-prompt:delay-before-input', { messageId: message.messageId, delayMs: PROMPT_INPUT_DELAY_MS })
       return waitBeforePromptInput()
     })
+    .then(async () => {
+      if (!message.attachments?.length) return
+      if (!siteAdapter.supportsFileUpload || !siteAdapter.uploadAttachments) {
+        log.warn('message:send-prompt:attachments-unsupported', { messageId: message.messageId, count: message.attachments.length })
+        return
+      }
+      log.info('message:send-prompt:uploading-attachments', { messageId: message.messageId, count: message.attachments.length })
+      try {
+        await siteAdapter.uploadAttachments(message.attachments)
+      } catch (error) {
+        log.warn('message:send-prompt:attachments-upload-failed', { messageId: message.messageId, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
     .then(() => fillAndSend(message.content, message.autoSend !== false))
     .then(() => {
       conversationMonitor?.reportConversationUpdate()

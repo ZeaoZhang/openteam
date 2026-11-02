@@ -211,7 +211,7 @@ const routeMessage = createMessageRouter([
   ...createRoleHandlers({ broadcastStoreUpdated, externalModelClient, log, newId, now, runtimeFrames, sendPrompt }),
   ...createHostModeHandlers({ broadcastStoreUpdated, log, now, roleTabHost, runtimeFrames }),
   ...createOrchestrationHandlers({ broadcastStoreUpdated, broadcastAutoGenerateStream, externalModelClient, getChatStatusFromRoles, log, newId, now, promptDeliveryLimiter, requestRoleRecovery, runtimeFrames, sendPrompt }),
-  ...createMessageHandlers({ broadcastStoreUpdated, externalModelClient, getChatStatusFromRoles, imageAttachments, log, newId, now, promptDeliveryLimiter, requestRoleRecovery, runtimeFrames, sendError, sendPrompt, sendRoleMessage }),
+  ...createMessageHandlers({ attachmentRepository: imageAttachmentRepository, broadcastStoreUpdated, externalModelClient, getChatStatusFromRoles, imageAttachments, log, newId, now, promptDeliveryLimiter, requestRoleRecovery, runtimeFrames, sendError, sendPrompt, sendRoleMessage }),
 ])
 
 const executeControlCommand = createControlActionExecutor({

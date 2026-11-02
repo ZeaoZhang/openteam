@@ -1,5 +1,5 @@
 import { isChatSite } from './chatSites'
-import type { ChatSite, GroupRole, OpenTeamStore, ReplyImageSource, RoleSiteHealthStatus, RoleStatus } from './types'
+import type { ChatSite, GroupRole, OpenTeamStore, PromptAttachmentPayload, ReplyImageSource, RoleSiteHealthStatus, RoleStatus } from './types'
 
 export type RuntimeRoleStatus =
   | 'opening'
@@ -23,6 +23,7 @@ export type SendPromptMessage = {
   autoSend?: boolean
   includesPersona?: boolean
   isRetry?: boolean
+  attachments?: PromptAttachmentPayload[]
 }
 
 export type StopGenerationMessage = {

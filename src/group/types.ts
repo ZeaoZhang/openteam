@@ -302,7 +302,7 @@ export interface GroupMessage {
   createdAt: number
   status: DeliveryStatus
   deliveryStatus?: Record<string, DeliveryStatus>
-  attachments?: MessageImageAttachment[]
+  attachments?: MessageAttachment[]
 }
 
 export interface ReplyImageSource {
@@ -323,6 +323,43 @@ export interface MessageImageAttachment {
   size?: number
   fileName?: string
   error?: string
+}
+
+/**
+ * Attachments the user sends with a chat message. Text files are stored as blobs too,
+ * so the background can inline their contents into the prompt while the bubble only
+ * shows a compact chip.
+ */
+export interface MessageFileAttachment {
+  id: string
+  type: 'file'
+  status: 'ready' | 'error'
+  kind: 'text' | 'document'
+  fileName: string
+  mimeType: string
+  size: number
+  error?: string
+}
+
+export type MessageAttachment = MessageImageAttachment | MessageFileAttachment
+
+export type MessageAttachmentKind = 'image' | 'text' | 'document'
+
+export interface MessageAttachmentDraft {
+  id: string
+  kind: MessageAttachmentKind
+  fileName: string
+  mimeType: string
+  size: number
+}
+
+export interface PromptAttachmentPayload {
+  id: string
+  kind: 'image' | 'document'
+  fileName: string
+  mimeType: string
+  size: number
+  dataBase64: string
 }
 
 export interface MessageReference {
