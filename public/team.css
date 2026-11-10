@@ -5477,3 +5477,362 @@ select:focus {
 .settings-conn-note {
   opacity: 0.78;
 }
+
+/* ---------- UX polish: composer footer ---------- */
+
+.composer {
+  padding-bottom: 10px;
+}
+
+#message-input {
+  min-height: 92px;
+  padding: 10px 8px 10px 2px;
+}
+
+.attachment-draft {
+  margin-bottom: 8px;
+}
+
+.attachment-draft[hidden] {
+  display: none;
+}
+
+.composer-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(132, 153, 171, 0.12);
+}
+
+.composer-attach {
+  flex: 0 0 auto;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 9px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.composer-hint {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.composer-target,
+.composer-busy {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-target {
+  color: #8b98a5;
+}
+
+.composer-busy {
+  color: #57d8dd;
+}
+
+.composer-busy:empty {
+  display: none;
+}
+
+.composer-send,
+#send-message {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 80px;
+  height: 34px;
+  padding: 0 18px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 720;
+  letter-spacing: 0.02em;
+}
+
+#send-message::before {
+  content: none;
+}
+
+.composer[data-empty="true"] #message-input {
+  color: rgba(190, 202, 214, 0.72);
+}
+
+.composer[data-empty="true"] .composer-footer {
+  opacity: 0.76;
+}
+
+/* ---------- UX polish: empty states ---------- */
+
+.empty-card {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+}
+
+.empty-card h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+}
+
+.empty-card p {
+  margin: 0;
+  max-width: 340px;
+  line-height: 1.55;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(47, 216, 204, 0.28);
+  border-radius: 14px;
+  background: radial-gradient(circle at 30% 25%, rgba(87, 216, 221, 0.24), rgba(12, 26, 38, 0.4));
+  color: #7ee7e1;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.welcome-state {
+  padding: 12px 0;
+}
+
+.welcome-card {
+  gap: 10px;
+  max-width: 460px;
+  padding: 30px 30px 26px;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(47, 216, 204, 0.15), transparent 55%),
+    rgba(14, 24, 35, 0.62);
+}
+
+.welcome-mark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(47, 216, 204, 0.3);
+  border-radius: 16px;
+  background: radial-gradient(circle at 32% 26%, rgba(120, 233, 226, 0.4), rgba(9, 24, 34, 0.6));
+  color: #b9fff8;
+  font-size: 26px;
+  line-height: 1;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+.welcome-eyebrow {
+  color: #6fd9d3;
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.welcome-card h3 {
+  font-size: 20px;
+}
+
+.welcome-steps {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  margin: 4px 0 2px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.welcome-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.welcome-step-index {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(132, 153, 171, 0.24);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+/* ---------- UX polish: keep messages visible while the member panel is open ---------- */
+
+.workspace {
+  transition: padding-right 0.18s ease;
+}
+
+/* Wide windows: reserve room so the messages keep flowing beside the panel.
+   Narrow windows: give the messages the full width and let the panel float over
+   them (it is a drawer, so overlapping there is the least bad option). */
+.app-shell:has(.role-panel.open) .workspace {
+  padding-right: max(0px, min(380px, calc(100% - 420px)));
+}
+
+/* ---------- UX polish: clearer focus ring for keyboard users ---------- */
+
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.rail-btn:focus-visible,
+.chat-item:focus-visible,
+.theme-option:focus-visible,
+.note-tool-btn:focus-visible,
+.composer-attach:focus-visible,
+.composer-send:focus-visible {
+  outline: 2px solid rgba(87, 216, 221, 0.72);
+  outline-offset: 2px;
+}
+
+/* ---------- UX polish: light theme contrast ---------- */
+
+:root[data-theme="light"] #iframe-host {
+  background: linear-gradient(155deg, #eef3f7, #e3eaf1 52%, #d8e1ea);
+}
+
+:root[data-theme="light"] .app-shell {
+  border-color: rgba(62, 88, 112, 0.34);
+  box-shadow:
+    0 30px 80px rgba(19, 33, 48, 0.24),
+    0 6px 22px rgba(19, 33, 48, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+:root[data-theme="light"] .composer-footer {
+  border-top-color: rgba(89, 111, 131, 0.16);
+}
+
+:root[data-theme="light"] .composer-target {
+  color: #5c6a77;
+}
+
+:root[data-theme="light"] .empty-card {
+  border-color: rgba(89, 111, 131, 0.2);
+  box-shadow: 0 18px 40px rgba(19, 33, 48, 0.08);
+}
+
+:root[data-theme="light"] .empty-icon,
+:root[data-theme="light"] .welcome-mark {
+  border-color: rgba(20, 127, 143, 0.3);
+  background: radial-gradient(circle at 30% 24%, #d9f4f1, #ffffff);
+  color: #12808d;
+  box-shadow: 0 12px 26px rgba(20, 127, 143, 0.14);
+}
+
+:root[data-theme="light"] .welcome-card {
+  background:
+    radial-gradient(circle at 50% -18%, rgba(20, 127, 143, 0.14), transparent 58%),
+    #ffffff;
+}
+
+:root[data-theme="light"] .welcome-eyebrow {
+  color: #147f8f;
+}
+
+:root[data-theme="light"] .welcome-step-index {
+  border-color: rgba(89, 111, 131, 0.26);
+  background: #ffffff;
+  color: #4d5c69;
+}
+
+:root[data-theme="light"] .composer[data-empty="true"] #message-input {
+  color: #8a95a0;
+}
+
+/* ---------- UX polish: header reflows instead of overflowing ---------- */
+
+.workspace > * {
+  min-width: 0;
+}
+
+.chat-header {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.chat-row {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.chat-title-block {
+  flex: 1 1 240px;
+}
+
+/* ---------- UX polish: member panel header clears the window dots ---------- */
+
+.app-shell:has(.role-panel.open) .role-panel .panel-header {
+  padding-top: 26px;
+}
+
+.app-shell:has(.role-panel.open) .role-panel .panel-header h2 {
+  margin-top: 2px;
+}
+
+/* ---------- UX polish: inactive composer ---------- */
+
+.composer[data-empty="true"] {
+  opacity: 0.94;
+}
+
+.composer[data-empty="true"] #message-input:disabled {
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.composer[data-empty="true"] .composer-attach {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ---------- UX polish: single-layer workspace (default) ----------
+   默认就是满屏工作台：AI 站点 iframe 仍在后台渲染（自动化需要），
+   但被工作台完全盖住，也不再接收鼠标事件，避免误触到后面那层页面。
+   需要看站点实况时用右上角 ⛶ 切换为浮窗（或点 ✕ 缩到角落）。 */
+.app-shell.fullscreen {
+  inset: 0;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+body:has(.app-shell.fullscreen) #iframe-host {
+  pointer-events: none;
+}
+
+/* 浮窗模式下站点墙才可点，此时窗口是有意让开的。 */
+.app-shell:not(.fullscreen) ~ #iframe-host {
+  pointer-events: auto;
+}

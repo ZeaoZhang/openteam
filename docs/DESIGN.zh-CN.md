@@ -166,8 +166,9 @@ flowchart LR
 - [src/group/contextSync.ts](../src/group/contextSync.ts)、[src/group/contextBudget.ts](../src/group/contextBudget.ts)：未同步上下文选择和上下文长度控制。
 - [src/group/orchestrationTemplates.ts](../src/group/orchestrationTemplates.ts)：可复用编排模板。
 - [src/group/orchestrationAutoPlan.ts](../src/group/orchestrationAutoPlan.ts)：自动规划编排 flow 的生成和规范化。
-- [src/group/orchestrationPrompts.ts](../src/group/orchestrationPrompts.ts)：编排人员节点和审核节点的 prompt 内容。
+- [src/group/orchestrationPrompts.ts](../src/group/orchestrationPrompts.ts)：编排人员节点、审核节点和辩论节点的 prompt 内容。
 - [src/group/orchestrationReview.ts](../src/group/orchestrationReview.ts)：解析结构化审核决策。
+- [src/group/orchestrationDebate.ts](../src/group/orchestrationDebate.ts)：解析辩论裁判的结构化裁定。
 - [src/group/externalModelContext.ts](../src/group/externalModelContext.ts)：外部模型人员的记忆和上下文处理。
 - [src/group/personaGeneration.ts](../src/group/personaGeneration.ts)：AI 生成人员草稿的 prompt 和 parser。
 - [src/group/conversationUrl.ts](../src/group/conversationUrl.ts)：支持的会话 URL 和默认站点 URL 处理。
@@ -251,18 +252,23 @@ flowchart TD
   Start["运行 flow"] --> Root["寻找根节点"]
   Root --> RoleStage["人员节点"]
   Root --> ReviewStage["审核节点"]
+  Root --> DebateStage["辩论节点"]
   RoleStage --> Replies["等待人员回复"]
   Replies --> Next["推进图"]
   ReviewStage --> Parse["解析 review JSON"]
   Parse -->|pass| Next
   Parse -->|fail 且仍可重试| Retry["带改进要求重试上一节点"]
   Parse -->|fail 且停止| Stop["停止或错误"]
+  DebateStage --> Turn["正方 / 反方逐轮发言"]
+  Turn --> Judge["裁判裁定"]
+  Judge -->|continue| Turn
+  Judge -->|conclude| Next
   Next --> Done{"还有后续节点?"}
   Done -->|yes| RoleStage
   Done -->|no| Complete["完成 run"]
 ```
 
-相关文件：[src/background/orchestrationRuntime.ts](../src/background/orchestrationRuntime.ts)、[src/background/orchestrationHandlers.ts](../src/background/orchestrationHandlers.ts)、[src/teamPage/orchestrationModalView.ts](../src/teamPage/orchestrationModalView.ts)、[src/teamPage/orchestrationCanvas.ts](../src/teamPage/orchestrationCanvas.ts)、[src/group/orchestrationPrompts.ts](../src/group/orchestrationPrompts.ts)、[src/group/orchestrationReview.ts](../src/group/orchestrationReview.ts)。
+相关文件：[src/background/orchestrationRuntime.ts](../src/background/orchestrationRuntime.ts)、[src/background/orchestrationHandlers.ts](../src/background/orchestrationHandlers.ts)、[src/teamPage/orchestrationModalView.ts](../src/teamPage/orchestrationModalView.ts)、[src/teamPage/orchestrationCanvas.ts](../src/teamPage/orchestrationCanvas.ts)、[src/group/orchestrationPrompts.ts](../src/group/orchestrationPrompts.ts)、[src/group/orchestrationReview.ts](../src/group/orchestrationReview.ts)、[src/group/orchestrationDebate.ts](../src/group/orchestrationDebate.ts)。
 
 ### 本地智能体命令流
 

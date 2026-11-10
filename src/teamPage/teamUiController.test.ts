@@ -287,6 +287,48 @@ describe('createTeamUiController', () => {
     expect(summary.textContent).toBe(template.summary)
     expect(summary.title).toBe(template.summary)
   })
+
+  it('closes the member panel and the new-chat form on Escape', () => {
+    const state = createTeamPageState()
+    const render = vi.fn()
+
+    createTeamUiController({
+      state,
+      settingsButtonEl: document.querySelector<HTMLButtonElement>('#settings-button')!,
+      settingsMenuEl: document.querySelector<HTMLElement>('#settings-menu')!,
+      quickCreateChatEl: document.querySelector<HTMLButtonElement>('#quick-create-chat')!,
+      createChatFormEl: document.querySelector<HTMLFormElement>('#create-chat-form')!,
+      newChatNameEl: document.querySelector<HTMLInputElement>('#new-chat-name')!,
+      togglePeopleDrawerEl: document.querySelector<HTMLButtonElement>('#toggle-people-drawer')!,
+      rolePanelEl: document.querySelector<HTMLElement>('#role-panel')!,
+      iframeHost: { restoreChat: vi.fn(() => []) },
+      getLanguage: () => 'zh-CN',
+      getCurrentChat: () => undefined,
+      getCurrentRoles: () => [],
+      getSelectedLoginSite: () => 'gemini',
+      render,
+      renderChatList: vi.fn(),
+      renderRolePanel: vi.fn(),
+      renderAddPersonDialog: vi.fn(),
+      closePeopleModals: vi.fn(),
+      closeExternalModels: vi.fn(),
+      registerComposerEvents: vi.fn(),
+      registerPeopleLibraryEvents: vi.fn(),
+      registerExternalModelsEvents: vi.fn(),
+      runCommand: vi.fn(async () => undefined),
+      showError: vi.fn(),
+      log: { debug: vi.fn(), info: vi.fn() },
+    }).registerUi()
+
+    document.querySelector<HTMLButtonElement>('#quick-create-chat')!.click()
+    state.peopleDrawerOpen = true
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+
+    expect(document.querySelector<HTMLFormElement>('#create-chat-form')!.hidden).toBe(true)
+    expect(document.querySelector<HTMLButtonElement>('#quick-create-chat')!.getAttribute('aria-expanded')).toBe('false')
+    expect(state.peopleDrawerOpen).toBe(false)
+    expect(render).toHaveBeenCalledTimes(1)
+  })
 })
 
 function makeChat(id: string, roleIds: string[]): GroupChat {

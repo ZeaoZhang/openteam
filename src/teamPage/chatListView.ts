@@ -5,6 +5,7 @@ import type { TeamPageState } from './appState'
 import { formatChatExportMarkdown, safeChatExportFilename } from './chatExport'
 import { formatChatListTime } from './chatExperience'
 import type { RuntimeResponse } from './runtimeClient'
+import type { EmptyCardOptions } from './viewHelpers'
 
 interface ChatListIframeHost {
   removeChat(chatId: string): void
@@ -22,7 +23,8 @@ export interface ChatListViewDependencies {
   getChatRecentSummary(chat: GroupChat): string
   roleToneClass(value: string): string
   roleAvatarLabel(value: string): string
-  emptyCard(title: string, body: string): HTMLElement
+  emptyCard(title: string, body: string, options?: EmptyCardOptions): HTMLElement
+  onCreateChat?(): void
   renderSelectedChat(): void
   renderRolePanel(): void
   sendRuntimeMessage<T>(type: string, payload?: Record<string, unknown>): Promise<RuntimeResponse<T>>
@@ -46,7 +48,16 @@ export function createChatListView(deps: ChatListViewDependencies): ChatListView
     deps.chatListEl.replaceChildren()
 
     if (chats.length === 0) {
-      deps.chatListEl.append(deps.emptyCard(ui('还没有群聊'), ui('在上方创建一个群聊，然后从人员库添加人员。')))
+      const createButton = document.createElement('button')
+      createButton.type = 'button'
+      createButton.className = 'btn btn-primary'
+      createButton.textContent = ui('＋ 新建第一个群聊')
+      createButton.addEventListener('click', () => deps.onCreateChat?.())
+      deps.chatListEl.append(deps.emptyCard(
+        ui('还没有群聊'),
+        ui('创建群聊后，从人员库挑选 AI 成员，发送时用 @ 点名即可开始协作。'),
+        { icon: '💬', actions: [createButton] },
+      ))
       return
     }
 

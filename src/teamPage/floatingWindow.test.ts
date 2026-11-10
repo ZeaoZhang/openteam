@@ -71,6 +71,35 @@ describe('team page floating window boundary', () => {
     expect(toggleFullscreenEl.getAttribute('aria-pressed')).toBe('false')
   })
 
+  it('restores the single-layer workspace after coming back from the launcher', () => {
+    const appShellEl = document.createElement('main')
+    appShellEl.classList.add('fullscreen')
+    const closeWindowEl = document.createElement('button')
+    const toggleWindowSizeEl = document.createElement('button')
+    const toggleFullscreenEl = document.createElement('button')
+    const windowLauncherEl = document.createElement('button')
+
+    const controls = createFloatingWindowControls({
+      appShellEl,
+      closeWindowEl,
+      toggleWindowSizeEl,
+      toggleFullscreenEl,
+      windowLauncherEl,
+    })
+    controls.registerFloatingWindowControls()
+
+    closeWindowEl.click()
+
+    expect(appShellEl.classList.contains('minimized')).toBe(true)
+    expect(appShellEl.classList.contains('fullscreen')).toBe(false)
+
+    windowLauncherEl.click()
+
+    expect(appShellEl.classList.contains('minimized')).toBe(false)
+    expect(appShellEl.classList.contains('fullscreen')).toBe(true)
+    expect(toggleFullscreenEl.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('minimizes the whole floating shell from the top-right close affordance', () => {
     const appShellEl = document.createElement('main')
     const closeWindowEl = document.createElement('button')

@@ -166,8 +166,9 @@ The `src/group` directory is the pure domain layer shared by background and UI c
 - [src/group/contextSync.ts](../src/group/contextSync.ts), [src/group/contextBudget.ts](../src/group/contextBudget.ts): unsynced context selection and context size control.
 - [src/group/orchestrationTemplates.ts](../src/group/orchestrationTemplates.ts): reusable orchestration templates.
 - [src/group/orchestrationAutoPlan.ts](../src/group/orchestrationAutoPlan.ts): generation and normalization of auto-planned orchestration flows.
-- [src/group/orchestrationPrompts.ts](../src/group/orchestrationPrompts.ts): prompt content for orchestration role stages and review stages.
+- [src/group/orchestrationPrompts.ts](../src/group/orchestrationPrompts.ts): prompt content for orchestration role, review, and debate stages.
 - [src/group/orchestrationReview.ts](../src/group/orchestrationReview.ts): parses structured review decisions.
+- [src/group/orchestrationDebate.ts](../src/group/orchestrationDebate.ts): parses structured debate verdicts.
 - [src/group/externalModelContext.ts](../src/group/externalModelContext.ts): memory/context handling for external-model roles.
 - [src/group/personaGeneration.ts](../src/group/personaGeneration.ts): prompt and parser for AI-generated person drafts.
 - [src/group/conversationUrl.ts](../src/group/conversationUrl.ts): supported conversation URL and default site URL handling.
@@ -251,12 +252,17 @@ flowchart TD
   Start["Run flow"] --> Root["Find root stages"]
   Root --> RoleStage["Role stage"]
   Root --> ReviewStage["Review stage"]
+  Root --> DebateStage["Debate stage"]
   RoleStage --> Replies["Wait for role replies"]
   Replies --> Next["Advance graph"]
   ReviewStage --> Parse["Parse review JSON"]
   Parse -->|pass| Next
   Parse -->|fail and attempts remain| Retry["Retry previous stage with instruction"]
   Parse -->|fail and stop| Stop["Stop or error"]
+  DebateStage --> Turn["Pro / con speak in rounds"]
+  Turn --> Judge["Judge verdict"]
+  Judge -->|continue| Turn
+  Judge -->|conclude| Next
   Next --> Done{"More stages?"}
   Done -->|yes| RoleStage
   Done -->|no| Complete["Complete run"]

@@ -190,7 +190,11 @@ export function createOrchestrationStatusView(deps: OrchestrationStatusViewDepen
     eyebrow.textContent = current.status === 'error' ? '失败节点' : '当前节点'
     const main = document.createElement('div')
     main.className = 'orchestration-status-current-main'
-    main.textContent = stage.kind === 'review' ? `审核 · ${stageStatusLabel(stage, rolesById(), deps.getStore())}` : stageStatusLabel(stage, rolesById(), deps.getStore())
+    main.textContent = stage.kind === 'review'
+      ? `审核 · ${stageStatusLabel(stage, rolesById(), deps.getStore())}`
+      : stage.kind === 'debate'
+        ? debateCurrentLabel(stage, current)
+        : stageStatusLabel(stage, rolesById(), deps.getStore())
     const sub = document.createElement('div')
     sub.className = 'orchestration-status-current-sub'
     sub.textContent = stage.description?.trim() || currentStatusText(current)
@@ -203,6 +207,16 @@ export function createOrchestrationStatusView(deps: OrchestrationStatusViewDepen
       const action = document.createElement('span')
       action.textContent = stage.review?.onMaxAttempts === 'continue' ? '上限后：继续往下走' : '上限后：停止流程'
       meta.append(attempts, action)
+      panel.append(meta)
+    }
+    if (stage.kind === 'debate') {
+      const meta = document.createElement('div')
+      meta.className = 'orchestration-status-review-meta'
+      const rounds = document.createElement('span')
+      rounds.textContent = `轮次 ${current.debate?.round ?? 1} / ${debateRounds(stage)}`
+      const verdicts = document.createElement('span')
+      verdicts.textContent = `裁判裁定 ${debateVerdictCount(run, stage.id)} 次`
+      meta.append(rounds, verdicts)
       panel.append(meta)
     }
     return panel
@@ -309,7 +323,14 @@ export function createOrchestrationStatusView(deps: OrchestrationStatusViewDepen
 
   function getFlowRoles(flow: OrchestrationFlow): GroupRole[] {
     const map = rolesById()
-    const roleIds = new Set(flow.stages.flatMap(stage => stage.roleIds))
+    const roleIds = new Set<string>()
+    for (const stage of flow.stages) {
+      for (const roleId of stage.roleIds) roleIds.add(roleId)
+      if (stage.kind === 'review') {
+        for (const roleId of stage.review?.reviewerRoleIds ?? []) roleIds.add(roleId)
+      }
+      if (stage.kind === 'debate' && stage.debate?.judgeRoleId) roleIds.add(stage.debate.judgeRoleId)
+    }
     return [...roleIds].map(roleId => map.get(roleId)).filter((role): role is GroupRole => Boolean(role))
   }
 
@@ -440,9 +461,9 @@ function diagramNodes(flow: OrchestrationFlow): DiagramNode[] {
   return stages.map((stage, index) => ({
     stage,
     x: stage.position?.x ?? 40 + index * 170,
-    y: stage.position?.y ?? (stage.kind === 'review' ? 52 : 64),
-    width: stage.kind === 'review' ? 116 : 128,
-    height: stage.kind === 'review' ? 90 : 64,
+    y: stage.position?.y ?? (stage.kind === 'review' ? 52 : stage.kind === 'debate' ? 58 : 64),
+    width: stage.kind === 'review' ? 116 : stage.kind === 'debate' ? 150 : 128,
+    height: stage.kind === 'review' ? 90 : stage.kind === 'debate' ? 72 : 64,
   }))
 }
 
@@ -511,10 +532,18 @@ function currentStageRun(run: OrchestrationRun): OrchestrationStageRun | undefin
 function currentNodeText(run: OrchestrationRun, flow: OrchestrationFlow): string {
   const current = currentStageRun(run)
   const stage = current ? flow.stages[current.stageIndex] : undefined
-  return stage?.kind === 'review' ? '审核' : stage?.name ?? '未开始'
+  if (stage?.kind === 'review') return '审核'
+  if (stage?.kind === 'debate') return '辩论'
+  return stage?.name ?? '未开始'
 }
 
 function currentStatusText(current: OrchestrationStageRun): string {
+  if (current.kind === 'debate') {
+    if (current.status === 'error') return '辩论发言失败'
+    if (current.status === 'skipped') return '已停止，等待继续'
+    if (current.status === 'completed') return '本轮发言已完成'
+    return current.debate?.side === 'judge' ? '裁判正在裁定' : '等待该辩手回复'
+  }
   if (current.status === 'running') return current.kind === 'review' ? '正在判断流程走向' : '正在执行'
   if (current.status === 'error') return current.kind === 'review' ? '审核失败' : '节点失败'
   if (current.status === 'skipped') return '已停止，等待继续'
@@ -533,12 +562,24 @@ function getVisibleRun(store: OpenTeamStore, chatId: string): VisibleRun | undef
 }
 
 function stageStatusLabel(stage: OrchestrationStage, rolesById: Map<string, GroupRole>, store: OpenTeamStore): string {
+  if (stage.kind === 'debate') {
+    const name = (roleId: string | undefined): string => roleId ? rolesById.get(roleId)?.name ?? roleId : '未选择'
+    const judge = stage.debate?.judgeRoleId
+    return `${name(stage.roleIds[0])} vs ${name(stage.roleIds[1])}${judge ? ` · 裁判 ${name(judge)}` : ''}`
+  }
   const roleIds = stage.kind === 'review' ? stage.review?.reviewerRoleIds ?? stage.roleIds : stage.roleIds
   const roleLabels = roleIds.map(roleId => roleStatusLabel(rolesById.get(roleId), roleId, store))
   return roleLabels.length > 0 ? roleLabels.join('、') : stage.name
 }
 
 function miniNodeLines(stage: OrchestrationStage, store: OpenTeamStore, rolesById: Map<string, GroupRole>, run: OrchestrationRun): string[] {
+  if (stage.kind === 'debate') {
+    const pro = rolesById.get(stage.roleIds[0] ?? '')?.name ?? '正方'
+    const con = rolesById.get(stage.roleIds[1] ?? '')?.name ?? '反方'
+    const judge = stage.debate?.judgeRoleId ? rolesById.get(stage.debate.judgeRoleId)?.name ?? '裁判' : '裁判'
+    const turn = [...run.stageRuns].reverse().find(stageRun => stageRun.stageId === stage.id && stageRun.kind === 'debate' && stageRun.debate)?.debate
+    return [`${pro} vs ${con}`, `裁判 · ${judge}`, `第 ${turn?.round ?? 1} / ${debateRounds(stage)} 轮`].filter(Boolean)
+  }
   const roleIds = stage.kind === 'review' ? stage.review?.reviewerRoleIds ?? stage.roleIds : stage.roleIds
   const firstRole = roleIds[0] ? rolesById.get(roleIds[0]) : undefined
   const name = firstRole?.name ?? stage.name
@@ -566,6 +607,23 @@ const siteLabel = chatSiteLabel
 
 function maxExecutions(run: OrchestrationRun): number {
   return run.maxNodeExecutions ?? run.maxRounds
+}
+
+function debateCurrentLabel(stage: OrchestrationStage, current: OrchestrationStageRun): string {
+  const round = current.debate?.round ?? 1
+  const side = current.debate?.side
+  const sideLabel = side === 'pro' ? '正方发言' : side === 'con' ? '反方发言' : side === 'judge' ? '裁判裁定' : '准备辩论'
+  return `辩论 · 第 ${round} 轮 · ${sideLabel}${stage.name && stage.name !== '正反辩论' ? `（${stage.name}）` : ''}`
+}
+
+function debateRounds(stage: OrchestrationStage): number {
+  const value = stage.debate?.rounds
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 3
+  return Math.min(10, Math.max(1, Math.floor(value)))
+}
+
+function debateVerdictCount(run: OrchestrationRun, stageId: string): number {
+  return run.stageRuns.filter(stageRun => stageRun.stageId === stageId && stageRun.kind === 'debate' && stageRun.debateVerdict).length
 }
 
 function reviewMaxAttempts(stage: OrchestrationStage): number {

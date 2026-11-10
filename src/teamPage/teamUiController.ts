@@ -127,8 +127,12 @@ export function createTeamUiController(deps: TeamUiControllerDependencies): Team
       deps.state.roleSiteMenuRoleId = undefined
       deps.state.roleActionMenuRoleId = undefined
       closeGroupTemplateModal(groupTemplateModalEl, groupTemplateSearchEl, groupTemplateCategoriesEl, groupTemplateListEl, confirmGroupTemplateCreateEl)
+      if (!deps.createChatFormEl.hidden) setChatCreatePopoverVisible(false)
+      const closedPeopleDrawer = deps.state.peopleDrawerOpen
+      if (closedPeopleDrawer) deps.state.peopleDrawerOpen = false
       deps.renderChatList()
       deps.renderRolePanel()
+      if (closedPeopleDrawer) deps.render()
     })
 
     requireElement<HTMLButtonElement>('#cancel-create-chat').addEventListener('click', () => {

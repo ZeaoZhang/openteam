@@ -2,6 +2,8 @@ import type { GroupRole, OrchestrationGraphSnapshot, OrchestrationStage } from '
 
 const ROLE_NODE_WIDTH = 124
 const ROLE_NODE_HEIGHT = 56
+const DEBATE_NODE_WIDTH = 150
+const DEBATE_NODE_HEIGHT = 72
 const REVIEW_NODE_WIDTH = 104
 const REVIEW_NODE_HEIGHT = 78
 const DEFAULT_NODE_CENTER_Y = 100
@@ -240,17 +242,21 @@ export function createOrchestrationCanvas(deps: OrchestrationCanvasDependencies)
           ? `${firstSiteLabel ? `${firstSiteLabel} · ` : ''}${stage.roleIds.length} 人并行`
           : firstSiteLabel
         const isReview = stage.kind === 'review'
+        const isDebate = stage.kind === 'debate'
         const selected = selectedStageId === stage.id
         const style = nodeStyle(selected)
-        const fallbackPosition = defaultStagePosition(index, isReview)
+        const fallbackPosition = defaultStagePosition(index, isReview, isDebate)
+        const debateLabel = isDebate
+          ? `辩论 · ${roleLabel}${stage.debate?.judgeRoleId ? `\n裁判 · ${getRoleName(stage.debate.judgeRoleId)}` : ''}`
+          : undefined
         return {
           id: stage.id,
           shape: isReview ? 'polygon' : 'rect',
           x: stage.position?.x ?? fallbackPosition.x,
           y: stage.position?.y ?? fallbackPosition.y,
-          width: nodeWidth(isReview),
-          height: nodeHeight(isReview),
-          label: `${roleLabel}${siteLabel ? `\n${siteLabel}` : ''}`,
+          width: nodeWidth(isReview, isDebate),
+          height: nodeHeight(isReview, isDebate),
+          label: debateLabel ?? `${roleLabel}${siteLabel ? `\n${siteLabel}` : ''}`,
           data: { stageId: stage.id },
           ports: {
             groups: {
@@ -511,11 +517,13 @@ export function arrangeOrchestrationGraph(stages: OrchestrationStage[], edges: O
     const laneIndex = lane.findIndex(item => item.id === stage.id)
     const centerY = laneCenterY(Math.max(0, laneIndex), lane.length)
     const isReview = stage.kind === 'review'
+    const isDebate = stage.kind === 'debate'
     return {
       ...stage,
       roleIds: [...stage.roleIds],
       review: stage.review ? { ...stage.review, reviewerRoleIds: [...stage.review.reviewerRoleIds] } : undefined,
-      position: { x: 56 + level * 180, y: centerY - nodeHeight(isReview) / 2 },
+      debate: stage.debate ? { ...stage.debate } : undefined,
+      position: { x: 56 + level * 180, y: centerY - nodeHeight(isReview, isDebate) / 2 },
     }
   })
   const positionById = new Map(positioned.map(stage => [stage.id, stage.position]))
@@ -586,14 +594,16 @@ function laneCenterY(index: number, count: number): number {
   return ARRANGED_NODE_CENTER_Y + index * LANE_GAP
 }
 
-function defaultStagePosition(index: number, isReview: boolean): { x: number; y: number } {
-  return { x: 48 + index * 154, y: DEFAULT_NODE_CENTER_Y - nodeHeight(isReview) / 2 }
+function defaultStagePosition(index: number, isReview: boolean, isDebate = false): { x: number; y: number } {
+  return { x: 48 + index * 154, y: DEFAULT_NODE_CENTER_Y - nodeHeight(isReview, isDebate) / 2 }
 }
 
-function nodeWidth(isReview: boolean): number {
-  return isReview ? REVIEW_NODE_WIDTH : ROLE_NODE_WIDTH
+function nodeWidth(isReview: boolean, isDebate = false): number {
+  if (isReview) return REVIEW_NODE_WIDTH
+  return isDebate ? DEBATE_NODE_WIDTH : ROLE_NODE_WIDTH
 }
 
-function nodeHeight(isReview: boolean): number {
-  return isReview ? REVIEW_NODE_HEIGHT : ROLE_NODE_HEIGHT
+function nodeHeight(isReview: boolean, isDebate = false): number {
+  if (isReview) return REVIEW_NODE_HEIGHT
+  return isDebate ? DEBATE_NODE_HEIGHT : ROLE_NODE_HEIGHT
 }

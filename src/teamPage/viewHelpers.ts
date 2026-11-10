@@ -1,17 +1,35 @@
 import type { GroupChat, GroupMessage, OpenTeamStore } from '../group/types'
 import { getAvatarInitial } from './chatExperience'
 
-export function emptyCard(title: string, body: string): HTMLElement {
+export interface EmptyCardOptions {
+  icon?: string
+  actions?: HTMLElement[]
+}
+
+export function emptyCard(title: string, body: string, options: EmptyCardOptions = {}): HTMLElement {
   const wrapper = document.createElement('div')
   wrapper.className = 'empty-state'
   const card = document.createElement('div')
   card.className = 'empty-card'
+  if (options.icon) {
+    const icon = document.createElement('div')
+    icon.className = 'empty-icon'
+    icon.textContent = options.icon
+    icon.setAttribute('aria-hidden', 'true')
+    card.append(icon)
+  }
   const heading = document.createElement('h3')
   heading.textContent = title
   const paragraph = document.createElement('p')
   paragraph.className = 'muted'
   paragraph.textContent = body
   card.append(heading, paragraph)
+  if (options.actions && options.actions.length > 0) {
+    const actions = document.createElement('div')
+    actions.className = 'empty-actions'
+    actions.append(...options.actions)
+    card.append(actions)
+  }
   wrapper.append(card)
   return wrapper
 }

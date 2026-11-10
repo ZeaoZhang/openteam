@@ -93,12 +93,17 @@ export const MAX_ORCHESTRATION_MAX_NODE_EXECUTIONS = 200
 export const DEFAULT_ORCHESTRATION_REVIEW_MAX_ATTEMPTS = 3
 export const DEFAULT_ORCHESTRATION_MAX_ROUNDS = 1
 export const MAX_ORCHESTRATION_MAX_ROUNDS = 50
+export const DEFAULT_ORCHESTRATION_DEBATE_ROUNDS = 3
+export const MAX_ORCHESTRATION_DEBATE_ROUNDS = 10
 
-export type OrchestrationStageKind = 'roles' | 'review'
+export type OrchestrationStageKind = 'roles' | 'review' | 'debate'
 export type OrchestrationRunStatus = 'pending' | 'running' | 'completed' | 'stopped' | 'error'
 export type OrchestrationStepStatus = 'pending' | 'running' | 'completed' | 'skipped' | 'error'
 export type ReviewDecision = 'pass' | 'fail'
 export type ReviewMaxAttemptsAction = 'stop' | 'continue'
+export type DebateSide = 'pro' | 'con' | 'judge'
+export type DebateDecision = 'continue' | 'conclude'
+export type DebateWinner = 'pro' | 'con' | 'draw'
 
 export interface OrchestrationReviewConfig {
   reviewerRoleIds: string[]
@@ -106,6 +111,34 @@ export interface OrchestrationReviewConfig {
   instructions?: string
   maxAttempts?: number
   onMaxAttempts?: ReviewMaxAttemptsAction
+}
+
+/**
+ * A true debate node: `stage.roleIds` is `[pro, con]`, and the judge rules
+ * after every round whether the debate should continue or conclude.
+ */
+export interface OrchestrationDebateConfig {
+  judgeRoleId: string
+  rounds?: number
+  instructions?: string
+}
+
+export interface OrchestrationDebateTurn {
+  side: DebateSide
+  round: number
+  roleId: string
+  replyMessageId?: string
+}
+
+export interface OrchestrationDebateVerdict {
+  round: number
+  decision: DebateDecision
+  winner: DebateWinner
+  reason: string
+  nextRoundInstruction: string
+  finalRecommendation: string
+  messageId: string
+  createdAt: number
 }
 
 export interface OrchestrationStage {
@@ -116,6 +149,7 @@ export interface OrchestrationStage {
   position?: OrchestrationGraphNodePosition
   roleIds: string[]
   review?: OrchestrationReviewConfig
+  debate?: OrchestrationDebateConfig
 }
 
 export interface OrchestrationGraphNodePosition {
@@ -192,6 +226,8 @@ export interface OrchestrationStageRun {
   status: OrchestrationStepStatus
   roleRuns: Record<string, OrchestrationRoleRun>
   reviewResults?: OrchestrationReviewResult[]
+  debate?: OrchestrationDebateTurn
+  debateVerdict?: OrchestrationDebateVerdict
   startedAt?: number
   completedAt?: number
 }
@@ -298,7 +334,7 @@ export interface GroupMessage {
   orchestrationRound?: number
   orchestrationStageId?: string
   orchestrationStageIndex?: number
-  orchestrationKind?: 'task' | 'role' | 'review' | 'status'
+  orchestrationKind?: 'task' | 'role' | 'review' | 'debate' | 'judge' | 'status'
   createdAt: number
   status: DeliveryStatus
   deliveryStatus?: Record<string, DeliveryStatus>

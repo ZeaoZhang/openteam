@@ -721,6 +721,38 @@ describe('group store', () => {
     expect(loaded.orchestrationFlowOrderByChatId['chat-1']).toEqual(['flow-no-graph'])
   })
 
+  it('persists debate stages and clamps rounds', async () => {
+    const store = createDefaultStore()
+    store.orchestrationFlowsById['flow-debate'] = {
+      id: 'flow-debate',
+      chatId: 'chat-1',
+      name: 'Debate flow',
+      stages: [
+        {
+          id: 'debate-1',
+          kind: 'debate',
+          name: 'Debate',
+          roleIds: ['role-pro', 'role-con'],
+          debate: { judgeRoleId: 'role-judge', rounds: 99, instructions: 'Be rigorous.' },
+        },
+      ],
+      maxRounds: 1,
+      createdAt: 1,
+      updatedAt: 2,
+    }
+    store.orchestrationFlowOrderByChatId['chat-1'] = ['flow-debate']
+
+    await saveStore(store)
+
+    const loaded = await loadStore()
+    expect(loaded.orchestrationFlowsById['flow-debate'].stages[0]).toMatchObject({
+      id: 'debate-1',
+      kind: 'debate',
+      roleIds: ['role-pro', 'role-con'],
+      debate: { judgeRoleId: 'role-judge', rounds: 10, instructions: 'Be rigorous.' },
+    })
+  })
+
   it('removes stale split-storage keys after a chat is deleted', async () => {
     const store = createDefaultStore()
     store.chatOrder = ['chat-1', 'chat-2']

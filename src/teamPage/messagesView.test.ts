@@ -2115,6 +2115,112 @@ describe('team page messages view boundary', () => {
     expect(messagesEl.querySelector('.orchestration-review-summary')?.textContent).toContain('重试说明：下一轮补齐测试')
   })
 
+  it('renders debate verdict summaries for judge messages', () => {
+    const now = Date.now()
+    const chat: GroupChat = {
+      id: 'chat-1',
+      name: '群聊',
+      mode: 'independent',
+      roleIds: ['role-1'],
+      messageIds: ['msg-judge'],
+      nextMessageSeq: 2,
+      status: 'ready',
+      createdAt: now,
+      updatedAt: now,
+    }
+    const role: GroupRole = { id: 'role-1', chatId: chat.id, name: '裁判', status: 'ready', contextCursor: 0, createdAt: now, updatedAt: now }
+    const message: GroupMessage = {
+      id: 'msg-judge',
+      chatId: chat.id,
+      seq: 1,
+      type: 'assistant',
+      content: '{"decision":"conclude"}',
+      roleId: role.id,
+      roleName: role.name,
+      orchestrationRunId: 'run-1',
+      orchestrationRound: 2,
+      orchestrationStageId: 'stage-debate',
+      orchestrationStageIndex: 3,
+      orchestrationKind: 'judge',
+      createdAt: now,
+      status: 'received',
+    }
+    const store: OpenTeamStore = {
+      ...createDefaultStore(),
+      currentChatId: chat.id,
+      chatOrder: [chat.id],
+      chatsById: { [chat.id]: chat },
+      rolesById: { [role.id]: role },
+      messagesById: { [message.id]: message },
+      orchestrationRunsById: {
+        'run-1': {
+          id: 'run-1',
+          chatId: chat.id,
+          flowId: 'flow-1',
+          status: 'completed',
+          currentRound: 2,
+          maxRounds: 2,
+          stageRuns: [
+            {
+              stageId: 'stage-debate',
+              stageIndex: 3,
+              kind: 'debate',
+              round: 2,
+              status: 'completed',
+              roleRuns: { [role.id]: { roleId: role.id, status: 'completed', messageId: message.id } },
+              debate: { side: 'judge', round: 2, roleId: role.id },
+              debateVerdict: {
+                round: 2,
+                decision: 'conclude',
+                winner: 'pro',
+                reason: '正方回应了成本质疑',
+                nextRoundInstruction: '',
+                finalRecommendation: '带成本上限推进',
+                messageId: message.id,
+                createdAt: now,
+              },
+            },
+          ],
+          createdAt: now,
+          updatedAt: now,
+        },
+      },
+    }
+    const messagesEl = document.createElement('section')
+
+    createMessagesView({
+      state: createTeamPageState(),
+      getStore: () => store,
+      messagesEl,
+      getCurrentChat: () => chat,
+      getCurrentRoles: () => [role],
+      getCurrentMessages: () => [message],
+      emptyCard: () => document.createElement('div'),
+      openAddPersonDialog: vi.fn(),
+      roleToneClass: () => 'role-tone-1',
+      roleAvatarLabel: () => '裁',
+      messageTitle: message => message.roleName ?? 'AI 人员',
+      focusRoleFrame: vi.fn(),
+      insertMention: vi.fn(),
+      setReference: vi.fn(),
+      resyncMessageReply: vi.fn(async () => undefined),
+      retryRoleReply: vi.fn(async () => undefined),
+      stopRoleReply: vi.fn(async () => undefined),
+      runCommand: vi.fn(async () => undefined),
+      render: vi.fn(),
+      showError: vi.fn(),
+      showSuccess: vi.fn(),
+      log: { warn: vi.fn() },
+    }).renderMessages()
+
+    expect(messagesEl.querySelector('.orchestration-message-label')?.textContent).toBe('编排 · 第 4 步 · 裁判')
+    const summary = messagesEl.querySelector('.orchestration-debate-summary')
+    expect(summary?.textContent).toContain('结论：收敛')
+    expect(summary?.textContent).toContain('胜方：正方')
+    expect(summary?.textContent).toContain('原因：正方回应了成本质疑')
+    expect(summary?.textContent).toContain('最终建议：带成本上限推进')
+  })
+
   it('invalidates cached message nodes when orchestration metadata changes', () => {
     const now = Date.now()
     const chat: GroupChat = {
@@ -2181,5 +2287,49 @@ describe('team page messages view boundary', () => {
     view.renderMessages()
 
     expect(messagesEl.querySelector('.orchestration-message-label')?.textContent).toBe('编排 · 第 2 步 · 状态')
+  })
+
+  it('shows a first-run welcome panel whose buttons start a chat or open the people library', () => {
+    const openCreateChat = vi.fn()
+    const openPeopleLibrary = vi.fn()
+    const messagesEl = document.createElement('section')
+
+    createMessagesView({
+      state: createTeamPageState(),
+      getStore: () => createDefaultStore(),
+      messagesEl,
+      getCurrentChat: () => undefined,
+      getCurrentRoles: () => [],
+      getCurrentMessages: () => [],
+      emptyCard: () => document.createElement('div'),
+      openAddPersonDialog: vi.fn(),
+      openCreateChat,
+      openPeopleLibrary,
+      roleToneClass: () => 'role-tone-1',
+      roleAvatarLabel: () => '工',
+      messageTitle: message => message.roleName ?? 'AI 人员',
+      focusRoleFrame: vi.fn(),
+      insertMention: vi.fn(),
+      setReference: vi.fn(),
+      resyncMessageReply: vi.fn(async () => undefined),
+      retryRoleReply: vi.fn(async () => undefined),
+      stopRoleReply: vi.fn(async () => undefined),
+      runCommand: vi.fn(async () => undefined),
+      render: vi.fn(),
+      showError: vi.fn(),
+      showSuccess: vi.fn(),
+      log: { warn: vi.fn() },
+    }).renderMessages()
+
+    expect(messagesEl.querySelector('.welcome-card h3')?.textContent).toBe('先新建或选择一个群聊')
+    expect(messagesEl.querySelectorAll('.welcome-steps li')).toHaveLength(3)
+
+    const [createButton, libraryButton] = [...messagesEl.querySelectorAll<HTMLButtonElement>('.welcome-card .empty-actions button')]
+    expect(createButton.textContent).toBe('新建群聊')
+    expect(libraryButton.textContent).toBe('浏览人员库')
+    createButton.click()
+    libraryButton.click()
+    expect(openCreateChat).toHaveBeenCalledTimes(1)
+    expect(openPeopleLibrary).toHaveBeenCalledTimes(1)
   })
 })

@@ -158,6 +158,43 @@ describe('orchestration canvas', () => {
     expect(onStageSelected).toHaveBeenCalledWith('review-1')
   })
 
+  it('renders a debate node with a judge and out-only port', async () => {
+    MockGraph.instances = []
+    const rootEl = document.createElement('div')
+    const canvas = createOrchestrationCanvas({
+      rootEl,
+      getRoleName: roleId => ({ 'role-1': '正方', 'role-2': '反方', 'role-3': '裁判' })[roleId] ?? roleId,
+      getRoleSiteLabel: () => '',
+      onStageSelected: vi.fn(),
+      onRoleDropped: vi.fn(),
+      loadX6: async () => ({ Graph: MockGraph }),
+    })
+
+    await canvas.mount([{
+      id: 'debate-1',
+      kind: 'debate',
+      name: '正反辩论',
+      roleIds: ['role-1', 'role-2'],
+      debate: { judgeRoleId: 'role-3', rounds: 2, instructions: '必须回应成本' },
+    }])
+
+    const node = MockGraph.instances[0].nodes[0] as {
+      shape?: string
+      width?: number
+      height?: number
+      label?: string
+      ports?: { items?: Array<{ id: string; group: string }> }
+    }
+    expect(node).toEqual(expect.objectContaining({ shape: 'rect', width: 150, height: 72 }))
+    expect(node.label).toContain('辩论')
+    expect(node.label).toContain('正方 + 反方')
+    expect(node.label).toContain('裁判 · 裁判')
+    expect(node.ports?.items).toEqual([
+      { id: 'in', group: 'in' },
+      { id: 'out', group: 'out' },
+    ])
+  })
+
   it('renders graph edges and reports dragged connections back to the draft', async () => {
     MockGraph.instances = []
     const rootEl = document.createElement('div')

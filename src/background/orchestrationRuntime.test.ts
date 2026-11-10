@@ -802,6 +802,145 @@ describe('orchestration runtime', () => {
     expect(run.status).toBe('running')
     expect(run.stageRuns.map(stageRun => `${stageRun.status}:${stageRun.stageId}`)).toEqual(['completed:stage-a', 'running:stage-b'])
   })
+  it('runs a multi-round pro/con debate and completes when the judge concludes', async () => {
+    const store = makeStore(['role-pro', 'role-con', 'role-judge'])
+    store.orchestrationFlowsById['flow-1'] = makeFlow('chat-1', [{
+      id: 'debate-1',
+      kind: 'debate',
+      name: 'Debate the plan',
+      roleIds: ['role-pro', 'role-con'],
+      debate: { judgeRoleId: 'role-judge', rounds: 2, instructions: 'Be rigorous.' },
+    }])
+    const harness = await setupBackground(store)
+    const ready = async (roleId: string, tabId: number) => {
+      await harness.invoke({ type: 'TEAM_FRAME_ROLE_READY', chatId: 'chat-1', roleId }, { tab: { id: tabId } as chrome.tabs.Tab, frameId: tabId, url: `https://gemini.google.com/app/${roleId}` })
+    }
+    await ready('role-pro', 101)
+    await ready('role-con', 102)
+    await ready('role-judge', 103)
+    const reply = async (roleId: string, content: string) => {
+      await harness.invoke({ type: 'TEAM_ROLE_REPLY', chatId: 'chat-1', roleId, messageId: lastPromptMessageId(harness.tabsSendMessage), content })
+    }
+
+    const started = await harness.invoke({ type: 'GROUP_ORCHESTRATION_RUN', chatId: 'chat-1', flowId: 'flow-1', task: 'Debate the rollout plan' }) as { ok: boolean; run: { id: string } }
+    expect(started.ok).toBe(true)
+    expect(promptCalls(harness.tabsSendMessage)).toHaveLength(1)
+    expect(promptCalls(harness.tabsSendMessage)[0][1].content).toContain('Your side:Pro')
+    expect(promptCalls(harness.tabsSendMessage)[0][1].content).toContain('Round:1 / 2')
+
+    await reply('role-pro', 'Pro opening')
+    expect(promptCalls(harness.tabsSendMessage)).toHaveLength(2)
+    expect(promptCalls(harness.tabsSendMessage)[1][1].content).toContain('Round 1 · Pro · role-pro:')
+    expect(promptCalls(harness.tabsSendMessage)[1][1].content).toContain('Pro opening')
+
+    await reply('role-con', 'Con rebuttal')
+    expect(promptCalls(harness.tabsSendMessage)).toHaveLength(3)
+    expect(promptCalls(harness.tabsSendMessage)[2][1].content).toContain('Round 1 · Con · role-con:')
+    expect(promptCalls(harness.tabsSendMessage)[2][1].content).toContain('Con rebuttal')
+
+    await reply('role-judge', JSON.stringify({
+      decision: 'continue',
+      winner: 'draw',
+      reason: 'One more round is needed.',
+      nextRoundInstruction: 'Focus on cost.',
+      finalRecommendation: '',
+    }))
+    expect(promptCalls(harness.tabsSendMessage)).toHaveLength(4)
+    expect(promptCalls(harness.tabsSendMessage)[3][1].content).toContain('Judge requirement for this round:')
+    expect(promptCalls(harness.tabsSendMessage)[3][1].content).toContain('Focus on cost.')
+
+    await reply('role-pro', 'Pro round 2')
+    await reply('role-con', 'Con round 2')
+    expect(promptCalls(harness.tabsSendMessage)).toHaveLength(6)
+
+    await reply('role-judge', JSON.stringify({
+      decision: 'conclude',
+      winner: 'pro',
+      reason: 'Pro handled the cost concern.',
+      nextRoundInstruction: '',
+      finalRecommendation: 'Adopt with a cost cap.',
+    }))
+
+    const finalStore = await harness.getStore()
+    const run = finalStore.orchestrationRunsById[started.run.id]
+    expect(run.status).toBe('completed')
+    expect(run.stageRuns.map(stageRun => stageRun.debate?.side)).toEqual(['pro', 'con', 'judge', 'pro', 'con', 'judge'])
+    expect(run.stageRuns.every(stageRun => stageRun.status === 'completed')).toBe(true)
+    expect(run.stageRuns[5].debateVerdict?.decision).toBe('conclude')
+    expect(run.stageRuns[5].debateVerdict?.winner).toBe('pro')
+    expect(run.stageRuns[5].debateVerdict?.finalRecommendation).toBe('Adopt with a cost cap.')
+  })
+
+  it('fails the debate when the judge keeps asking for more rounds at the round limit', async () => {
+    const store = makeStore(['role-pro', 'role-con', 'role-judge'])
+    store.orchestrationFlowsById['flow-1'] = makeFlow('chat-1', [{
+      id: 'debate-1',
+      kind: 'debate',
+      name: 'Debate',
+      roleIds: ['role-pro', 'role-con'],
+      debate: { judgeRoleId: 'role-judge', rounds: 1, instructions: 'Be rigorous.' },
+    }])
+    const harness = await setupBackground(store)
+    const ready = async (roleId: string, tabId: number) => {
+      await harness.invoke({ type: 'TEAM_FRAME_ROLE_READY', chatId: 'chat-1', roleId }, { tab: { id: tabId } as chrome.tabs.Tab, frameId: tabId, url: `https://gemini.google.com/app/${roleId}` })
+    }
+    await ready('role-pro', 101)
+    await ready('role-con', 102)
+    await ready('role-judge', 103)
+    const reply = async (roleId: string, content: string) => {
+      await harness.invoke({ type: 'TEAM_ROLE_REPLY', chatId: 'chat-1', roleId, messageId: lastPromptMessageId(harness.tabsSendMessage), content })
+    }
+
+    const started = await harness.invoke({ type: 'GROUP_ORCHESTRATION_RUN', chatId: 'chat-1', flowId: 'flow-1', task: 'Debate the plan' }) as { ok: boolean; run: { id: string } }
+    expect(started.ok).toBe(true)
+    await reply('role-pro', 'Pro')
+    await reply('role-con', 'Con')
+    await reply('role-judge', JSON.stringify({ decision: 'continue', winner: 'draw', reason: 'Not yet.', nextRoundInstruction: 'More detail.', finalRecommendation: '' }))
+
+    const finalStore = await harness.getStore()
+    const run = finalStore.orchestrationRunsById[started.run.id]
+    expect(run.status).toBe('error')
+    expect(run.error).toContain('最大辩论轮数')
+    expect(promptCalls(harness.tabsSendMessage)).toHaveLength(3)
+  })
+  it('resumes a stopped debate at the next speaker instead of advancing the graph', async () => {
+    const store = makeStore(['role-pro', 'role-con', 'role-judge'])
+    store.orchestrationFlowsById['flow-1'] = makeFlow('chat-1', [{
+      id: 'debate-1',
+      kind: 'debate',
+      name: 'Debate',
+      roleIds: ['role-pro', 'role-con'],
+      debate: { judgeRoleId: 'role-judge', rounds: 2, instructions: 'Be rigorous.' },
+    }, {
+      id: 'after',
+      kind: 'roles',
+      name: 'After',
+      roleIds: ['role-pro'],
+    }])
+    const harness = await setupBackground(store)
+    const ready = async (roleId: string, tabId: number) => {
+      await harness.invoke({ type: 'TEAM_FRAME_ROLE_READY', chatId: 'chat-1', roleId }, { tab: { id: tabId } as chrome.tabs.Tab, frameId: tabId, url: `https://gemini.google.com/app/${roleId}` })
+    }
+    await ready('role-pro', 101)
+    await ready('role-con', 102)
+    await ready('role-judge', 103)
+
+    const started = await harness.invoke({ type: 'GROUP_ORCHESTRATION_RUN', chatId: 'chat-1', flowId: 'flow-1', task: 'Debate the plan' }) as { ok: boolean; run: { id: string } }
+    expect(started.ok).toBe(true)
+    await harness.invoke({ type: 'TEAM_ROLE_REPLY', chatId: 'chat-1', roleId: 'role-pro', messageId: lastPromptMessageId(harness.tabsSendMessage), content: 'Pro opening' })
+
+    await harness.invoke({ type: 'GROUP_ORCHESTRATION_STOP', chatId: 'chat-1' })
+    await harness.invoke({ type: 'GROUP_ORCHESTRATION_RESUME', chatId: 'chat-1', runId: started.run.id })
+
+    const calls = promptCalls(harness.tabsSendMessage)
+    expect(calls).toHaveLength(3)
+    expect(calls[2][0]).toBe(102)
+    expect(calls[2][1].content).toContain('Pro opening')
+    const resumedStore = await harness.getStore()
+    const run = resumedStore.orchestrationRunsById[started.run.id]
+    expect(run.status).toBe('running')
+    expect(run.stageRuns.map(stageRun => `${stageRun.status}:${stageRun.debate?.side}`)).toEqual(['completed:pro', 'running:con'])
+  })
 })
 
 type PromptCall = [number, { type?: string; roleId: string; messageId: string; content: string }, { frameId: number }]

@@ -5,7 +5,7 @@ describe('built-in orchestration templates', () => {
   it('covers the core orchestration structures users need to learn', () => {
     const capabilities = new Set(BUILTIN_ORCHESTRATION_TEMPLATES.flatMap(template => template.capabilities))
 
-    expect([...capabilities]).toEqual(expect.arrayContaining(['sequential', 'parallel', 'review', 'loop', 'merge']))
+    expect([...capabilities]).toEqual(expect.arrayContaining(['sequential', 'parallel', 'review', 'loop', 'merge', 'debate']))
   })
 
   it('defines valid stage role references and graph edges', () => {
@@ -22,6 +22,10 @@ describe('built-in orchestration templates', () => {
         for (const reviewerRoleKey of stage.review?.reviewerRoleKeys ?? []) {
           expect(roleKeys.has(reviewerRoleKey), `${template.id}:${stage.id}:${reviewerRoleKey}`).toBe(true)
         }
+        if (stage.debate) {
+          expect(roleKeys.has(stage.debate.judgeRoleKey), `${template.id}:${stage.id}:judge`).toBe(true)
+          expect(stage.roleKeys, `${template.id}:${stage.id}:debaters`).toHaveLength(2)
+        }
       }
 
       for (const edge of template.edges) {
@@ -36,6 +40,17 @@ describe('built-in orchestration templates', () => {
       expect(template.defaultTask.trim().length, template.id).toBeGreaterThan(12)
       expect(template.defaultTask, template.id).not.toContain('例如')
     }
+  })
+
+  it('includes a runnable pro/con debate template', () => {
+    const debate = BUILTIN_ORCHESTRATION_TEMPLATES.find(template => template.id === 'debate')
+    const stage = debate?.stages[0]
+
+    expect(stage?.kind).toBe('debate')
+    expect(stage?.roleKeys).toEqual(['pro', 'con'])
+    expect(stage?.debate?.judgeRoleKey).toBe('judge')
+    expect(stage?.debate?.rounds).toBe(3)
+    expect(stage?.debate?.instructions?.trim().length).toBeGreaterThan(0)
   })
 
   it('includes concrete examples for parallel work and review loops', () => {

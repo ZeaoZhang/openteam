@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="team.css" />
   </head>
   <body>
-    <div id="app" class="app-shell">
+    <div id="app" class="app-shell fullscreen">
       <div id="floating-toolbar" class="floating-toolbar">
         <button id="close-window" class="icon-btn window-dot window-dot-close" type="button" aria-label="缩小窗口" title="缩小窗口">×</button>
         <button id="toggle-window-size" class="icon-btn window-dot window-dot-minimize" type="button" aria-expanded="true" aria-label="缩小窗口" title="缩小窗口">−</button>
@@ -159,18 +159,16 @@
         <form id="composer" class="composer">
           <div id="reference-draft" class="reference-draft" hidden></div>
           <div id="mention-panel" class="mention-panel" hidden></div>
-          <div class="composer-attachments">
-            <button id="attach-file" class="btn btn-ghost composer-attach" type="button" aria-label="添加图片或文件" title="添加图片或文件">📎</button>
-            <div id="attachment-draft" class="attachment-draft" hidden></div>
-            <input id="attachment-input" class="composer-file-input" type="file" multiple hidden />
-          </div>
+          <div id="attachment-draft" class="attachment-draft" hidden></div>
+          <input id="attachment-input" class="composer-file-input" type="file" multiple hidden />
           <textarea id="message-input" placeholder="输入消息，@成员可指定回复；不 @ 仅记录到群聊。"></textarea>
-          <div class="composer-actions">
-            <div>
-              <div id="target-preview" class="muted tiny">选择群聊后可发送</div>
-              <div id="busy-preview" class="tiny"></div>
+          <div class="composer-footer">
+            <button id="attach-file" class="btn btn-ghost composer-attach" type="button" aria-label="添加图片或文件" title="添加图片或文件（也可直接粘贴或拖入）">📎</button>
+            <div class="composer-hint">
+              <div id="target-preview" class="composer-target">选择群聊后可发送</div>
+              <div id="busy-preview" class="composer-busy"></div>
             </div>
-            <button id="send-message" class="btn btn-primary" type="submit" disabled>发送</button>
+            <button id="send-message" class="btn btn-primary composer-send" type="submit" disabled title="发送（Enter），Shift+Enter 换行">发送</button>
           </div>
         </form>
       </main>

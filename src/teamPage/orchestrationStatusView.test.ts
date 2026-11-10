@@ -162,6 +162,47 @@ describe('orchestration status view', () => {
     expect(node?.querySelector('[data-node-id="stage-3"]')?.classList.contains('current')).toBe(true)
   })
 
+  it('renders debate progress and the judge meta for the current debate turn', () => {
+    const fixture = baseFixture('running')
+    const judge: GroupRole = { id: 'role-3', chatId: fixture.chat.id, name: '裁判', chatSite: 'chatgpt', status: 'ready', contextCursor: 0, createdAt: 1, updatedAt: 1 }
+    fixture.store.rolesById[judge.id] = judge
+    fixture.chat.roleIds.push(judge.id)
+    fixture.flow.stages = [{
+      id: 'debate-1',
+      kind: 'debate',
+      name: '正反辩论',
+      roleIds: ['role-1', 'role-2'],
+      debate: { judgeRoleId: 'role-3', rounds: 3, instructions: '必须回应成本' },
+    }]
+    fixture.flow.graph = {
+      stageNodes: [{ ...fixture.flow.stages[0], position: { x: 40, y: 60 } }],
+      edges: [],
+    }
+    fixture.run.stageRuns = [{
+      stageId: 'debate-1',
+      stageIndex: 0,
+      kind: 'debate',
+      round: 2,
+      status: 'running',
+      roleRuns: { 'role-1': { roleId: 'role-1', status: 'running' } },
+      debate: { side: 'pro', round: 2, roleId: 'role-1' },
+    }]
+
+    const node = createOrchestrationStatusView({
+      getStore: () => fixture.store,
+      getCurrentChat: () => fixture.chat,
+      getCurrentRoles: () => Object.values(fixture.store.rolesById),
+      reconnectRolesForSend: vi.fn(async () => undefined),
+      runCommand: vi.fn(async () => undefined),
+      showError: vi.fn(),
+    }).renderOrchestrationStatus()
+
+    expect(node?.textContent).toContain('辩论 · 第 2 轮 · 正方发言')
+    expect(node?.textContent).toContain('轮次 2 / 3')
+    expect(node?.textContent).toContain('裁判裁定 0 次')
+    expect(node?.querySelector('[data-node-id="debate-1"]')?.classList.contains('current')).toBe(true)
+  })
+
   it('renders saved mini graph vertices as orthogonal SVG line segments', () => {
     const fixture = baseFixture('running')
     fixture.flow.graph!.edges = [

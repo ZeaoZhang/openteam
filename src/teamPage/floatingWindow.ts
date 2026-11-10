@@ -17,6 +17,7 @@ export function createFloatingWindowControls(deps: FloatingWindowDependencies): 
   const margin = 8
   const minShellWidth = 760
   const minShellHeight = 520
+  let minimizedFromFullscreen = false
 
   function ensureShellPositioned(): DOMRect {
     const rect = deps.appShellEl.getBoundingClientRect()
@@ -52,7 +53,16 @@ export function createFloatingWindowControls(deps: FloatingWindowDependencies): 
   }
 
   function setWindowMinimized(minimized: boolean): void {
-    if (minimized) setWindowFullscreen(false)
+    if (minimized) {
+      // 记住缩到角落之前是否是满屏工作台，恢复时回到同一个单层布局，
+      // 避免用户从启动器回来时突然变成"浮窗盖在站点墙上"的两层页面。
+      minimizedFromFullscreen = deps.appShellEl.classList.contains('fullscreen')
+      setWindowFullscreen(false)
+    }
+    if (!minimized) {
+      setWindowFullscreen(minimizedFromFullscreen)
+      minimizedFromFullscreen = false
+    }
     if (!minimized && deps.appShellEl.style.transform !== 'none') ensureShellPositioned()
     deps.appShellEl.classList.toggle('minimized', minimized)
     deps.windowLauncherEl.hidden = !minimized

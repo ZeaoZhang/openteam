@@ -58,6 +58,8 @@ export function createComposerView(deps: ComposerViewDependencies): ComposerView
 
   function renderComposerState(): void {
     const chat = deps.getCurrentChat()
+    deps.composerFormEl.dataset.empty = chat ? 'false' : 'true'
+    deps.messageInputEl.disabled = !chat
     if (chat) pruneStaleAttachments(chat.id)
     renderReferenceDraft()
     renderMentionPanel()

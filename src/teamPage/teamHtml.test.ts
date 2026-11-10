@@ -22,7 +22,7 @@ describe('team.html chat creation UI', () => {
     const html = readTeamDocument()
 
     expect(html).toContain('<body>')
-    expect(html).toContain('<div id="app" class="app-shell">')
+    expect(html).toContain('<div id="app" class="app-shell fullscreen">')
     expect(html).not.toContain('access-locked')
     expect(html).not.toContain('invite-gate')
     expect(html).not.toContain('invite-code')

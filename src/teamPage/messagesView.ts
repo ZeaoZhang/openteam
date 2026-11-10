@@ -2,7 +2,7 @@ import MarkdownIt from 'markdown-it'
 import { extractMarkdownFromDom } from '../content/sites/domMarkdown'
 import { DEFAULT_MESSAGE_HIGHLIGHT_COLOR, MESSAGE_HIGHLIGHT_COLORS, messageHighlightColorRgb, type MessageHighlightColor } from '../group/highlightColors'
 import { roleMentionLabel, roleMentionLabelOptionsFromSettings, roleModelLabel } from '../group/mentionParser'
-import type { GroupChat, GroupMessage, GroupRole, MessageFileAttachment, MessageHighlight, MessageImageAttachment, MessageReference, OpenTeamStore, OrchestrationReviewResult } from '../group/types'
+import type { GroupChat, GroupMessage, GroupRole, MessageFileAttachment, MessageHighlight, MessageImageAttachment, MessageReference, OpenTeamStore, OrchestrationDebateVerdict, OrchestrationReviewResult } from '../group/types'
 import type { ImageAttachmentBlobRecord } from '../shared/imageAttachmentRepository'
 import type { TeamPageState } from './appState'
 import { buildChatRenderItems, getChatStartupNotice, getStoppedReplyRoles, getVisibleThinkingRoles, THINKING_TIMEOUT_MS } from './chatExperience'
@@ -26,6 +26,8 @@ export interface MessagesViewDependencies {
   getCurrentMessages(): GroupMessage[]
   emptyCard(title: string, body: string): HTMLElement
   openAddPersonDialog(): void
+  openCreateChat?(): void
+  openPeopleLibrary?(): void
   roleToneClass(seed: string | undefined): string
   roleAvatarLabel(name: string | undefined): string
   messageTitle(message: GroupMessage): string
@@ -65,6 +67,60 @@ function isStructuredFailureReason(value: string): boolean {
   return normalized === 'send_failed' || normalized === 'response_not_found' || normalized === 'timeout' || normalized === 'site_blocked'
 }
 
+function buildWelcomePanel(deps: MessagesViewDependencies): HTMLElement {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'empty-state welcome-state'
+  const card = document.createElement('div')
+  card.className = 'empty-card welcome-card'
+
+  const mark = document.createElement('div')
+  mark.className = 'welcome-mark'
+  mark.textContent = '◈'
+  mark.setAttribute('aria-hidden', 'true')
+
+  const eyebrow = document.createElement('span')
+  eyebrow.className = 'welcome-eyebrow'
+  eyebrow.textContent = '开始协作'
+
+  const heading = document.createElement('h3')
+  heading.textContent = '先新建或选择一个群聊'
+
+  const paragraph = document.createElement('p')
+  paragraph.className = 'muted'
+  paragraph.textContent = '群聊里的人员会各自在独立的 AI 站点回答，并把上下文共享给彼此。'
+
+  const steps = document.createElement('ol')
+  steps.className = 'welcome-steps'
+  for (const [index, label] of ['新建群聊', '从人员库添加 AI 成员', '用 @ 点名，成员依次回复'].entries()) {
+    const item = document.createElement('li')
+    const badge = document.createElement('span')
+    badge.className = 'welcome-step-index'
+    badge.textContent = String(index + 1)
+    const text = document.createElement('span')
+    text.textContent = label
+    item.append(badge, text)
+    steps.append(item)
+  }
+
+  const actions = document.createElement('div')
+  actions.className = 'empty-actions'
+  const createButton = document.createElement('button')
+  createButton.type = 'button'
+  createButton.className = 'btn btn-primary'
+  createButton.textContent = '新建群聊'
+  createButton.addEventListener('click', () => deps.openCreateChat?.())
+  const libraryButton = document.createElement('button')
+  libraryButton.type = 'button'
+  libraryButton.className = 'btn'
+  libraryButton.textContent = '浏览人员库'
+  libraryButton.addEventListener('click', () => deps.openPeopleLibrary?.())
+  actions.append(createButton, libraryButton)
+
+  card.append(mark, eyebrow, heading, paragraph, steps, actions)
+  wrapper.append(card)
+  return wrapper
+}
+
 export function createMessagesView(deps: MessagesViewDependencies): MessagesView {
   let markMenu: HTMLElement | undefined
   let selectedMark: { message: GroupMessage; text: string; startOffset: number; endOffset: number; rect: DOMRect; color: MessageHighlightColor } | undefined
@@ -85,7 +141,7 @@ export function createMessagesView(deps: MessagesViewDependencies): MessagesView
     deps.messagesEl.replaceChildren()
 
     if (!chat) {
-      deps.messagesEl.append(deps.emptyCard('选择一个群聊', '左侧群聊列表会显示最近摘要、状态和更新时间。'))
+      deps.messagesEl.append(buildWelcomePanel(deps))
       return
     }
 
@@ -218,6 +274,8 @@ export function createMessagesView(deps: MessagesViewDependencies): MessagesView
     if (fileChips) bubble.append(fileChips)
     const reviewSummary = renderOrchestrationReviewSummary(message)
     if (reviewSummary) bubble.append(reviewSummary)
+    const debateSummary = renderOrchestrationDebateSummary(message)
+    if (debateSummary) bubble.append(debateSummary)
     if (message.references?.length) bubble.append(referenceBox(message.references[0]))
 
     if (message.type === 'assistant') {
@@ -600,6 +658,8 @@ export function createMessagesView(deps: MessagesViewDependencies): MessagesView
     if (kind === 'task') return '任务'
     if (kind === 'role') return '人员'
     if (kind === 'review') return '复核'
+    if (kind === 'debate') return '辩论'
+    if (kind === 'judge') return '裁判'
     return '状态'
   }
 
@@ -614,6 +674,35 @@ export function createMessagesView(deps: MessagesViewDependencies): MessagesView
     if (result.failedCriteria.length > 0) summary.append(reviewSummaryLine('未通过', result.failedCriteria.join('、')))
     if (result.nextRoundInstruction) summary.append(reviewSummaryLine('重试说明', result.nextRoundInstruction))
     return summary
+  }
+
+  function renderOrchestrationDebateSummary(message: GroupMessage): HTMLElement | undefined {
+    if (message.orchestrationKind !== 'judge') return undefined
+    const verdict = findDebateVerdictForMessage(message)
+    if (!verdict) return undefined
+    const summary = document.createElement('div')
+    summary.className = 'orchestration-review-summary orchestration-debate-summary'
+    summary.append(reviewSummaryLine('结论', verdict.decision === 'continue' ? '继续辩论' : '收敛'))
+    summary.append(reviewSummaryLine('胜方', debateWinnerLabel(verdict.winner)))
+    if (verdict.reason) summary.append(reviewSummaryLine('原因', verdict.reason))
+    if (verdict.nextRoundInstruction) summary.append(reviewSummaryLine('下一轮', verdict.nextRoundInstruction))
+    if (verdict.finalRecommendation) summary.append(reviewSummaryLine('最终建议', verdict.finalRecommendation))
+    return summary
+  }
+
+  function findDebateVerdictForMessage(message: GroupMessage): OrchestrationDebateVerdict | undefined {
+    if (!message.orchestrationRunId) return undefined
+    const run = deps.getStore().orchestrationRunsById[message.orchestrationRunId]
+    for (const stageRun of run?.stageRuns ?? []) {
+      if (stageRun.debateVerdict?.messageId === message.id) return stageRun.debateVerdict
+    }
+    return undefined
+  }
+
+  function debateWinnerLabel(winner: OrchestrationDebateVerdict['winner']): string {
+    if (winner === 'pro') return '正方'
+    if (winner === 'con') return '反方'
+    return '平局'
   }
 
   function findReviewResultForMessage(message: GroupMessage): OrchestrationReviewResult | undefined {
@@ -660,6 +749,7 @@ export function createMessagesView(deps: MessagesViewDependencies): MessagesView
       orchestrationStageIndex: message.orchestrationStageIndex,
       orchestrationKind: message.orchestrationKind,
       orchestrationReviewResult: findReviewResultForMessage(message),
+      orchestrationDebateVerdict: findDebateVerdictForMessage(message),
       highlights: deps.getStore().messageHighlightsById?.[message.id],
       targetRoleIds: message.targetRoleIds,
       mentionedRoleIds: message.mentionedRoleIds,

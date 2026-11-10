@@ -1,7 +1,7 @@
 import type { OrchestrationGraphSnapshot, OrchestrationStageKind, ReviewMaxAttemptsAction } from './types'
 
 export type OrchestrationTemplateCategory = 'structure' | 'scenario'
-export type OrchestrationTemplateCapability = 'sequential' | 'parallel' | 'review' | 'loop' | 'merge'
+export type OrchestrationTemplateCapability = 'sequential' | 'parallel' | 'review' | 'loop' | 'merge' | 'debate'
 
 export interface OrchestrationTemplateRole {
   key: string
@@ -18,6 +18,12 @@ export interface OrchestrationTemplateReview {
   onMaxAttempts: ReviewMaxAttemptsAction
 }
 
+export interface OrchestrationTemplateDebate {
+  judgeRoleKey: string
+  rounds: number
+  instructions: string
+}
+
 export interface OrchestrationTemplateStage {
   id: string
   kind: OrchestrationStageKind
@@ -25,6 +31,7 @@ export interface OrchestrationTemplateStage {
   description: string
   roleKeys: string[]
   review?: OrchestrationTemplateReview
+  debate?: OrchestrationTemplateDebate
 }
 
 export interface OrchestrationTemplateEdge {
@@ -139,6 +146,25 @@ export const BUILTIN_ORCHESTRATION_TEMPLATES: BuiltinOrchestrationTemplate[] = [
     ],
   },
   {
+    id: 'debate',
+    category: 'structure',
+    name: '正反辩论',
+    summary: '正方与反方多轮对抗，裁判在每轮后判断继续还是收敛，并给出最终结论。',
+    structure: '正方立论 -> 反方回应 -> 裁判裁定（多轮）',
+    defaultTask: '请围绕“团队是否应该引入多 Agent 自动编排”展开正反辩论。双方必须直接回应对方论点，裁判在每轮后判断是否需要继续，最终给出结论和可执行建议。',
+    capabilities: ['debate', 'loop'],
+    maxNodeExecutions: 30,
+    roles: [
+      role('pro', '正方辩手', '支持方案并主动论证', '你是正方辩手，负责为用户任务中的方案建立清晰、可验证的论证，并逐条回应反方质疑。'),
+      role('con', '反方辩手', '质疑方案并指出风险', '你是反方辩手，负责严格质疑方案的假设、成本、风险和适用边界，并逐条回应正方论证。'),
+      role('judge', '辩论裁判', '按标准裁定是否收敛', '你是辩论裁判，负责根据评判标准判断双方论证质量，决定是否还需要一轮辩论，并在收敛时给出最终结论。'),
+    ],
+    stages: [
+      debateStage('debate', '正反辩论', '双方多轮对抗，裁判逐轮裁定。', ['pro', 'con'], 'judge', 3, '论点必须直接回应用户任务；论证有依据；双方都要回应对方的核心质疑；结论可作为行动依据。'),
+    ],
+    edges: [],
+  },
+  {
     id: 'product-review',
     category: 'scenario',
     name: '产品方案评审',
@@ -226,6 +252,21 @@ function role(key: string, name: string, description: string, systemPrompt: stri
 
 function stage(id: string, kind: OrchestrationStageKind, name: string, description: string, roleKeys: string[]): OrchestrationTemplateStage {
   return { id, kind, name, description, roleKeys }
+}
+
+function debateStage(id: string, name: string, description: string, debaterRoleKeys: string[], judgeRoleKey: string, rounds: number, instructions: string): OrchestrationTemplateStage {
+  return {
+    id,
+    kind: 'debate',
+    name,
+    description,
+    roleKeys: debaterRoleKeys,
+    debate: {
+      judgeRoleKey,
+      rounds,
+      instructions,
+    },
+  }
 }
 
 function reviewStage(id: string, name: string, description: string, reviewerRoleKeys: string[], instructions: string): OrchestrationTemplateStage {

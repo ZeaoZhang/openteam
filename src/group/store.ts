@@ -1,7 +1,9 @@
 import {
+  DEFAULT_ORCHESTRATION_DEBATE_ROUNDS,
   DEFAULT_ORCHESTRATION_MAX_NODE_EXECUTIONS,
   DEFAULT_ORCHESTRATION_MAX_ROUNDS,
   DEFAULT_ORCHESTRATION_REVIEW_MAX_ATTEMPTS,
+  MAX_ORCHESTRATION_DEBATE_ROUNDS,
   MAX_ORCHESTRATION_MAX_NODE_EXECUTIONS,
   MAX_ORCHESTRATION_MAX_ROUNDS,
 } from './types'
@@ -441,12 +443,15 @@ function normalizeOrchestrationFlowRecord(raw: unknown): Record<string, Orchestr
 function normalizeOrchestrationStages(raw: unknown): OrchestrationFlow['stages'] {
   if (!Array.isArray(raw)) return []
   return raw.flatMap(stage => {
-    if (!isRecord(stage) || typeof stage.id !== 'string' || (stage.kind !== 'roles' && stage.kind !== 'review') || typeof stage.name !== 'string' || !Array.isArray(stage.roleIds)) return []
+    if (!isRecord(stage) || typeof stage.id !== 'string' || (stage.kind !== 'roles' && stage.kind !== 'review' && stage.kind !== 'debate') || typeof stage.name !== 'string' || !Array.isArray(stage.roleIds)) return []
     const position = normalizeOrchestrationNodePosition(stage.position)
     const review = normalizeOrchestrationReviewConfig(stage.review)
+    const debate = normalizeOrchestrationDebateConfig(stage.debate)
+    if (stage.kind === 'debate' && !debate) return []
     return [{
       ...(stage as unknown as OrchestrationFlow['stages'][number]),
       ...(review ? { review } : {}),
+      ...(debate ? { debate } : {}),
       ...(position ? { position } : {}),
     }]
   })
@@ -461,6 +466,20 @@ function normalizeOrchestrationReviewConfig(raw: unknown): OrchestrationFlow['st
     maxAttempts: normalizeOrchestrationReviewMaxAttempts(raw.maxAttempts),
     onMaxAttempts: raw.onMaxAttempts === 'continue' ? 'continue' : 'stop',
   }
+}
+
+function normalizeOrchestrationDebateConfig(raw: unknown): OrchestrationFlow['stages'][number]['debate'] | undefined {
+  if (!isRecord(raw) || typeof raw.judgeRoleId !== 'string' || raw.judgeRoleId.trim().length === 0) return undefined
+  return {
+    judgeRoleId: raw.judgeRoleId,
+    rounds: normalizeOrchestrationDebateRounds(raw.rounds),
+    instructions: typeof raw.instructions === 'string' ? raw.instructions : undefined,
+  }
+}
+
+function normalizeOrchestrationDebateRounds(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULT_ORCHESTRATION_DEBATE_ROUNDS
+  return Math.min(MAX_ORCHESTRATION_DEBATE_ROUNDS, Math.max(1, Math.floor(raw)))
 }
 
 function normalizeOrchestrationNodePosition(raw: unknown): OrchestrationFlow['stages'][number]['position'] | undefined {

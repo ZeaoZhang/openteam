@@ -1,12 +1,23 @@
-import { buildOrchestrationReviewMessageContent, buildOrchestrationRoleMessageContent } from '../group/orchestrationPrompts'
+import {
+  buildOrchestrationDebateJudgeMessageContent,
+  buildOrchestrationDebateMessageContent,
+  buildOrchestrationReviewMessageContent,
+  buildOrchestrationRoleMessageContent,
+  type OrchestrationDebateTranscriptEntry,
+} from '../group/orchestrationPrompts'
+import { parseDebateVerdict } from '../group/orchestrationDebate'
 import { parseReviewDecision } from '../group/orchestrationReview'
 import {
+  DEFAULT_ORCHESTRATION_DEBATE_ROUNDS,
   DEFAULT_ORCHESTRATION_MAX_NODE_EXECUTIONS,
   DEFAULT_ORCHESTRATION_REVIEW_MAX_ATTEMPTS,
+  MAX_ORCHESTRATION_DEBATE_ROUNDS,
   MAX_ORCHESTRATION_MAX_NODE_EXECUTIONS,
   type GroupChat,
   type GroupMessage,
   type OpenTeamStore,
+  type OrchestrationDebateTurn,
+  type OrchestrationDebateVerdict,
   type OrchestrationFlow,
   type OrchestrationGraphSnapshot,
   type OrchestrationReviewResult,
@@ -237,6 +248,10 @@ export async function resumeOrchestrationRun(deps: OrchestrationRuntimeDependenc
       removeStageRunAndFollowing(run, last)
       return { run, stageIndices: [last.stageIndex] }
     }
+    const lastStage = flow.stages[last.stageIndex]
+    if (last.kind === 'debate' && lastStage?.kind === 'debate' && nextDebateTurn(run, lastStage)) {
+      return { run, stageIndices: [last.stageIndex] }
+    }
     const next = nextStageDecision(store, chat, run, last, timestamp)
     return { run, stageIndices: next.next ? next.stageIndices : [] }
   })
@@ -272,6 +287,65 @@ export async function maybeAdvanceOrchestrationRun(deps: OrchestrationRuntimeDep
     roleRun.status = 'completed'
     roleRun.completedAt = timestamp
     run.updatedAt = timestamp
+
+    if (stageRun.kind === 'debate') {
+      const turn = stageRun.debate
+      const reply = input.replyMessage
+      if (!turn || !reply) {
+        const reason = '辩论节点缺少发言记录或回复内容'
+        roleRun.status = 'error'
+        roleRun.error = reason
+        stageRun.status = 'error'
+        run.status = 'error'
+        run.error = reason
+        run.updatedAt = timestamp
+        chat.status = 'error'
+        chat.updatedAt = timestamp
+        return { next: false as const }
+      }
+      turn.replyMessageId = reply.id
+      const stage = requireFlow(store, chat.id, run.flowId).stages[stageRun.stageIndex]
+      if (!stage || stage.kind !== 'debate') {
+        failRun(store, chat, run, '找不到辩论节点配置', timestamp)
+        return { next: false as const }
+      }
+      if (turn.side !== 'judge') {
+        stageRun.status = 'completed'
+        stageRun.completedAt = timestamp
+        return { next: true as const, runId: run.id, stageIndices: [stageRun.stageIndex] }
+      }
+      const parsed = parseDebateVerdict(reply.content)
+      if (!parsed.ok) {
+        roleRun.status = 'error'
+        roleRun.error = parsed.error
+        stageRun.status = 'error'
+        run.status = 'error'
+        run.error = parsed.error
+        run.updatedAt = timestamp
+        chat.status = 'error'
+        chat.updatedAt = timestamp
+        return { next: false as const }
+      }
+      const maxRounds = debateRounds(stage)
+      stageRun.debateVerdict = {
+        round: turn.round,
+        ...parsed.verdict,
+        messageId: reply.id,
+        createdAt: timestamp,
+      }
+      stageRun.status = 'completed'
+      stageRun.completedAt = timestamp
+      if (parsed.verdict.decision === 'continue' && turn.round >= maxRounds) {
+        failRun(store, chat, run, `裁判在第 ${turn.round} 轮仍要求继续，但已达到最大辩论轮数（${maxRounds} 轮）`, timestamp)
+        return { next: false as const }
+      }
+      if (parsed.verdict.decision === 'continue') {
+        run.currentRound = Math.max(run.currentRound, turn.round)
+        return { next: true as const, runId: run.id, stageIndices: [stageRun.stageIndex] }
+      }
+      run.currentRound = Math.max(run.currentRound, turn.round)
+      return nextStageDecision(store, chat, run, stageRun, timestamp)
+    }
 
     if (stageRun.kind === 'review') {
       const reply = input.replyMessage
@@ -435,7 +509,12 @@ async function startStage(deps: OrchestrationRuntimeDependencies, runId: string,
 
     const taskMessage = getRunTaskMessage(store, chat, run)
     if (!taskMessage) throw new Error('找不到编排任务消息')
-    const targetRoleIds = targetRoleIdsForStage(stage)
+    const debateTurn = stage.kind === 'debate' ? debateTurnForStart(run, stage) : undefined
+    if (stage.kind === 'debate' && !debateTurn) {
+      failRun(store, chat, run, `辩论节点无法确定下一位发言人：${stage.name}`, timestamp)
+      return { deliveries: [], externalDeliveries: [] }
+    }
+    const targetRoleIds = debateTurn ? [debateTurn.roleId] : targetRoleIdsForStage(stage)
     const frameBlocker = findLocalRoleFrameBlocker(store, chat, targetRoleIds, deps)
     if (frameBlocker) {
       return {
@@ -451,7 +530,7 @@ async function startStage(deps: OrchestrationRuntimeDependencies, runId: string,
     }
 
     removePendingStageRun(run, stageIndex)
-    const promptMessage = createStagePromptMessage(deps, store, chat, run, stage, stageIndex, taskMessage.content, timestamp)
+    const promptMessage = createStagePromptMessage(deps, store, chat, run, stage, stageIndex, taskMessage.content, timestamp, debateTurn)
     promptMessage.targetRoleIds = targetRoleIds
     promptMessage.mentionedRoleIds = targetRoleIds
     promptMessage.mentionsAll = false
@@ -465,12 +544,14 @@ async function startStage(deps: OrchestrationRuntimeDependencies, runId: string,
       stageId: stage.id,
       stageIndex,
       kind: stage.kind,
-      round: run.currentRound,
+      round: debateTurn?.round ?? run.currentRound,
       status: 'running',
       roleRuns: {},
+      ...(debateTurn ? { debate: debateTurn } : {}),
       startedAt: timestamp,
     }
     run.stageRuns.push(stageRun)
+    if (debateTurn) run.currentRound = debateTurn.round
     run.status = 'running'
     run.updatedAt = timestamp
     chat.status = 'running'
@@ -666,10 +747,44 @@ async function sendExternalOrchestrationPrompt(deps: OrchestrationRuntimeDepende
   }
 }
 
-function createStagePromptMessage(deps: OrchestrationRuntimeDependencies, store: OpenTeamStore, chat: GroupChat, run: OrchestrationRun, stage: OrchestrationStage, stageIndex: number, userTask: string, timestamp: number): GroupMessage {
-  const content = stage.kind === 'review'
-    ? buildOrchestrationReviewMessageContent({ userTask, currentStage: stage, language: store.settings.language })
-    : buildOrchestrationRoleMessageContent({ userTask, currentStage: stage, previousReviewResult: lastReviewResult(run), language: store.settings.language })
+function createStagePromptMessage(deps: OrchestrationRuntimeDependencies, store: OpenTeamStore, chat: GroupChat, run: OrchestrationRun, stage: OrchestrationStage, stageIndex: number, userTask: string, timestamp: number, debateTurn?: OrchestrationDebateTurn): GroupMessage {
+  let content: string
+  let orchestrationKind: GroupMessage['orchestrationKind']
+  if (stage.kind === 'debate' && debateTurn) {
+    const transcript = debateTranscript(store, run, stage.id)
+    const lastVerdict = latestDebateVerdict(run, stage.id)
+    if (debateTurn.side === 'judge') {
+      content = buildOrchestrationDebateJudgeMessageContent({
+        userTask,
+        currentStage: stage,
+        round: debateTurn.round,
+        maxRounds: debateRounds(stage),
+        transcript,
+        lastVerdict,
+        language: store.settings.language,
+      })
+      orchestrationKind = 'judge'
+    } else {
+      content = buildOrchestrationDebateMessageContent({
+        userTask,
+        currentStage: stage,
+        side: debateTurn.side,
+        roleName: store.rolesById[debateTurn.roleId]?.name ?? '',
+        round: debateTurn.round,
+        maxRounds: debateRounds(stage),
+        transcript,
+        lastVerdict,
+        language: store.settings.language,
+      })
+      orchestrationKind = 'debate'
+    }
+  } else if (stage.kind === 'review') {
+    content = buildOrchestrationReviewMessageContent({ userTask, currentStage: stage, language: store.settings.language })
+    orchestrationKind = 'review'
+  } else {
+    content = buildOrchestrationRoleMessageContent({ userTask, currentStage: stage, previousReviewResult: lastReviewResult(run), language: store.settings.language })
+    orchestrationKind = 'role'
+  }
 
   return {
     id: deps.newId('msg'),
@@ -678,10 +793,10 @@ function createStagePromptMessage(deps: OrchestrationRuntimeDependencies, store:
     type: 'user',
     content,
     orchestrationRunId: run.id,
-    orchestrationRound: run.currentRound,
+    orchestrationRound: debateTurn?.round ?? run.currentRound,
     orchestrationStageId: stage.id,
     orchestrationStageIndex: stageIndex,
-    orchestrationKind: stage.kind === 'review' ? 'review' : 'role',
+    orchestrationKind,
     createdAt: timestamp,
     status: 'pending',
   }
@@ -769,7 +884,18 @@ function validateExecutableFlow(store: OpenTeamStore, chat: GroupChat, flow: Orc
   for (const stage of flow.stages) {
     if (stage.kind === 'roles' && stage.roleIds.length === 0) throw new Error(`执行节点缺少人员：${stage.name}`)
     if (stage.kind === 'review' && stage.review?.reviewerRoleIds?.length !== 1) throw new Error(`复核节点必须绑定一个复核人员：${stage.name}`)
-    const roleIds = stage.kind === 'review' ? stage.review?.reviewerRoleIds ?? [] : stage.roleIds
+    if (stage.kind === 'debate') {
+      if (stage.roleIds.length !== 2) throw new Error(`辩论节点必须绑定正方和反方两个人员：${stage.name}`)
+      if (stage.roleIds[0] === stage.roleIds[1]) throw new Error(`辩论节点必须使用两个不同的人员：${stage.name}`)
+      const judgeRoleId = stage.debate?.judgeRoleId
+      if (!judgeRoleId) throw new Error(`辩论节点必须绑定一个裁判：${stage.name}`)
+      if (judgeRoleId === stage.roleIds[0] || judgeRoleId === stage.roleIds[1]) throw new Error(`辩论节点的裁判不能同时担任辩手：${stage.name}`)
+    }
+    const roleIds = stage.kind === 'review'
+      ? stage.review?.reviewerRoleIds ?? []
+      : stage.kind === 'debate'
+        ? [...stage.roleIds, stage.debate?.judgeRoleId ?? ''].filter(Boolean)
+        : stage.roleIds
     for (const roleId of roleIds) requireRole(store, chat.id, roleId)
   }
 }
@@ -911,6 +1037,76 @@ function reviewMaxAttempts(stage: OrchestrationStage): number {
 
 function reviewAttemptCount(run: OrchestrationRun, stageId: string): number {
   return run.stageRuns.filter(stageRun => stageRun.stageId === stageId && stageRun.kind === 'review').length
+}
+
+function debateRounds(stage: OrchestrationStage): number {
+  const value = stage.debate?.rounds
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_ORCHESTRATION_DEBATE_ROUNDS
+  return Math.min(MAX_ORCHESTRATION_DEBATE_ROUNDS, Math.max(1, Math.floor(value)))
+}
+
+/**
+ * Turns since the last concluded verdict. A fresh debate starts after a
+ * concluded one, so a flow that loops back into the node gets a clean session.
+ */
+function debateSessionTurns(run: OrchestrationRun, stageId: string): OrchestrationStageRun[] {
+  const turns = debateStageTurns(run, stageId)
+  let sessionStart = 0
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    if (turns[index].debate?.side === 'judge' && turns[index].debateVerdict?.decision === 'conclude') {
+      sessionStart = index + 1
+      break
+    }
+  }
+  return turns.slice(sessionStart)
+}
+
+function debateStageTurns(run: OrchestrationRun, stageId: string): OrchestrationStageRun[] {
+  return run.stageRuns.filter(stageRun => stageRun.stageId === stageId && stageRun.kind === 'debate' && Boolean(stageRun.debate))
+}
+
+function nextDebateTurn(run: OrchestrationRun, stage: OrchestrationStage): OrchestrationDebateTurn | undefined {
+  const completed = debateStageTurns(run, stage.id).filter(stageRun => stageRun.status === 'completed' && stageRun.debate)
+  const last = completed[completed.length - 1]
+  if (!last?.debate) return debateTurnFor(stage, 'pro', 1)
+  if (last.debate.side === 'pro') return debateTurnFor(stage, 'con', last.debate.round)
+  if (last.debate.side === 'con') return debateTurnFor(stage, 'judge', last.debate.round)
+  if (last.debateVerdict?.decision === 'continue') return debateTurnFor(stage, 'pro', last.debate.round + 1)
+  return undefined
+}
+
+function debateTurnForStart(run: OrchestrationRun, stage: OrchestrationStage): OrchestrationDebateTurn | undefined {
+  return nextDebateTurn(run, stage) ?? debateTurnFor(stage, 'pro', 1)
+}
+
+function debateTurnFor(stage: OrchestrationStage, side: OrchestrationDebateTurn['side'], round: number): OrchestrationDebateTurn | undefined {
+  const roleId = side === 'pro' ? stage.roleIds[0] : side === 'con' ? stage.roleIds[1] : stage.debate?.judgeRoleId
+  return roleId ? { side, round, roleId } : undefined
+}
+
+function latestDebateVerdict(run: OrchestrationRun, stageId: string): OrchestrationDebateVerdict | undefined {
+  for (const stageRun of [...debateSessionTurns(run, stageId)].reverse()) {
+    if (stageRun.debateVerdict) return stageRun.debateVerdict
+  }
+  return undefined
+}
+
+function debateTranscript(store: OpenTeamStore, run: OrchestrationRun, stageId: string): OrchestrationDebateTranscriptEntry[] {
+  return debateSessionTurns(run, stageId)
+    .filter(stageRun => stageRun.status === 'completed' && stageRun.debate && stageRun.debate.side !== 'judge')
+    .flatMap(stageRun => {
+      const turn = stageRun.debate
+      if (!turn) return []
+      const message = turn.replyMessageId ? store.messagesById[turn.replyMessageId] : undefined
+      const content = message?.content?.trim() ?? ''
+      if (!content) return []
+      return [{
+        round: turn.round,
+        side: turn.side === 'pro' ? 'pro' as const : 'con' as const,
+        roleName: message?.roleName ?? store.rolesById[turn.roleId]?.name ?? '',
+        content,
+      }]
+    })
 }
 
 function rootStageIndices(flow: OrchestrationFlow): number[] {

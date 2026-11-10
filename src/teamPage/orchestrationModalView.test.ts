@@ -904,6 +904,60 @@ describe('orchestration modal view', () => {
     expect(ordered.map(stage => stage.id)).toEqual(['stage-1', 'stage-2', 'review-1'])
   })
 
+  it('configures and validates a debate node with pro, con and judge', async () => {
+    const harness = createHarness()
+    harness.store.rolesById['role-3'] = { id: 'role-3', chatId: 'chat-1', name: '裁判', chatSite: 'chatgpt', status: 'ready', contextCursor: 0, createdAt: 1, updatedAt: 1 }
+    harness.store.chatsById['chat-1'].roleIds.push('role-3')
+    const view = createView(harness)
+    view.registerOrchestrationEvents()
+    harness.refs.openOrchestrationEl.click()
+    dropRole(harness, 'role-1')
+    await flushAsync()
+    MockGraph.latest().selectNode(MockGraph.latest().nodes[0].id as string)
+
+    const kindSelect = harness.refs.orchestrationStageSettingsEl.querySelector('select[data-stage-kind]') as HTMLSelectElement
+    kindSelect.value = 'debate'
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }))
+
+    expect(harness.refs.orchestrationReviewSettingsEl.textContent).toContain('正方人员')
+    expect(harness.refs.orchestrationReviewSettingsEl.textContent).toContain('反方人员')
+    expect(harness.refs.orchestrationReviewSettingsEl.textContent).toContain('裁判人员')
+    expect(harness.refs.orchestrationReviewSettingsEl.textContent).toContain('最大辩论轮数')
+    expect(harness.refs.orchestrationReviewSettingsEl.textContent).toContain('评判标准')
+    const selects = harness.refs.orchestrationReviewSettingsEl.querySelectorAll('select')
+    expect(selects).toHaveLength(3)
+    expect((selects[0] as HTMLSelectElement).value).toBe('role-1')
+    expect((selects[1] as HTMLSelectElement).value).toBe('role-2')
+    expect((selects[2] as HTMLSelectElement).value).toBe('role-3')
+    const rounds = harness.refs.orchestrationReviewSettingsEl.querySelector('input[type="number"]') as HTMLInputElement
+    expect(rounds.value).toBe('3')
+
+    harness.refs.orchestrationTaskEl.value = '正反辩论'
+    let judgeSelect = harness.refs.orchestrationReviewSettingsEl.querySelectorAll('select')[2] as HTMLSelectElement
+    judgeSelect.value = 'role-1'
+    judgeSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    harness.refs.runOrchestrationEl.click()
+    await flushAsync()
+    expect(harness.errors).toContain('辩论节点的裁判不能同时担任辩手：产品')
+
+    judgeSelect = harness.refs.orchestrationReviewSettingsEl.querySelectorAll('select')[2] as HTMLSelectElement
+    judgeSelect.value = 'role-3'
+    judgeSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    const criteria = harness.refs.orchestrationReviewSettingsEl.querySelector('textarea') as HTMLTextAreaElement
+    criteria.value = '必须回应成本'
+    criteria.dispatchEvent(new Event('input', { bubbles: true }))
+    harness.refs.runOrchestrationEl.click()
+    await flushAsync()
+
+    const runPayload = harness.runCommand.mock.calls.find(call => call[0] === 'GROUP_ORCHESTRATION_RUN')?.[1] as { flow?: OrchestrationFlow }
+    expect(runPayload.flow?.stages).toHaveLength(1)
+    expect(runPayload.flow?.stages[0]).toMatchObject({
+      kind: 'debate',
+      roleIds: ['role-1', 'role-2'],
+      debate: { judgeRoleId: 'role-3', rounds: 3, instructions: '必须回应成本' },
+    })
+  })
+
   it('drops roles as independent nodes and leaves connection decisions to the user', async () => {
     const harness = createHarness()
     const view = createView(harness)
